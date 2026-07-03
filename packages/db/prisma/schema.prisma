@@ -68,9 +68,11 @@ model TimeEntry {
 enum StopReason {
   MANUAL
   WEBSOCKET_TIMEOUT
+  AUTO_STOPPED
 }
 
 enum SyncStatus {
+  NEEDS_APPROVAL
   PENDING
   SYNCED
   FAILED
