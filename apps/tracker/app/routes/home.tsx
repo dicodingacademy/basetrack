@@ -4,7 +4,7 @@ import { useNavigation } from "react-router";
 import type { Route } from "./+types/home";
 import { getSession, getUserFromSessionId } from "../utils/session.server";
 import { fetchAssignments, fetchProjectDetails, getValidAccessToken } from "../utils/basecamp.server";
-import { startTimer, stopTimer, getActiveTimer } from "../services/timer.server";
+import { startTimer, stopTimer, getActiveTimer, getPendingApprovals, approveTimeEntry } from "../services/timer.server";
 import { Button } from "../components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "../components/ui/card";
 
@@ -28,6 +28,8 @@ import {
 } from "../components/ui/sidebar";
 import { TaskCard } from "../components/home/TaskCard";
 import { ActiveTimerCard } from "../components/home/ActiveTimerCard";
+import { PendingApprovals } from "../components/home/PendingApprovals";
+import { SettingsModal } from "../components/home/SettingsModal";
 import { Clock, Briefcase, LayoutDashboard, CheckCircle2, ArrowRight } from "lucide-react";
 import type { BasecampAssignment, BasecampProject, GroupedAssignment, GroupedTask } from "../types/basecamp";
 
@@ -50,7 +52,7 @@ export async function loader({ request }: Route.LoaderArgs) {
   const user = await getUserFromSessionId(sessionId);
 
   if (!user) {
-    return { user: null, groupedAssignments: [], activeTimer: null };
+    return { user: null, groupedAssignments: [], activeTimer: null, pendingApprovals: [] };
   }
   
   let groupedAssignments: GroupedAssignment[] = [];
@@ -101,11 +103,18 @@ export async function loader({ request }: Route.LoaderArgs) {
   }
 
   const activeTimer = await getActiveTimer(user.id);
+  const pendingApprovals = await getPendingApprovals(user.id);
 
   return {
-    user: { id: user.id, name: user.name, email: user.email },
+    user: { 
+      id: user.id, 
+      name: user.name, 
+      email: user.email,
+      autoStopThresholdHours: user.autoStopThresholdHours 
+    },
     groupedAssignments,
     activeTimer,
+    pendingApprovals,
   };
 }
 
@@ -134,11 +143,36 @@ export async function action({ request }: Route.ActionArgs) {
     return await stopTimer(user.id, user.basecampId);
   }
 
+  if (intent === "APPROVE_TIMER") {
+    const entryId = formData.get("entryId") as string;
+    const durationHours = parseFloat(formData.get("durationHours") as string);
+    if (!entryId || isNaN(durationHours)) {
+      return new Response("Invalid data", { status: 400 });
+    }
+    
+    return await approveTimeEntry(user.id, entryId, user.basecampId, Math.floor(durationHours * 3600));
+  }
+  
+  if (intent === "UPDATE_SETTINGS") {
+    const autoStopThresholdHours = parseInt(formData.get("autoStopThresholdHours") as string, 10);
+    if (isNaN(autoStopThresholdHours) || autoStopThresholdHours < 1) {
+      return new Response("Invalid value", { status: 400 });
+    }
+    
+    // Using prisma from db.server
+    const { prisma } = await import("../utils/db.server");
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { autoStopThresholdHours }
+    });
+    return { success: true };
+  }
+
   return { success: false };
 }
 
 export default function Home({ loaderData }: Route.ComponentProps) {
-  const { user, groupedAssignments, activeTimer: serverActiveTimer } = loaderData;
+  const { user, groupedAssignments, activeTimer: serverActiveTimer, pendingApprovals } = loaderData;
   const navigation = useNavigation();
 
   let activeTimer = serverActiveTimer;
@@ -247,6 +281,9 @@ export default function Home({ loaderData }: Route.ComponentProps) {
                   <span className="truncate font-semibold">{user.name}</span>
                   <span className="truncate text-xs text-zinc-500 dark:text-zinc-400">{user.email}</span>
                 </div>
+                <div onClick={(e) => e.stopPropagation()}>
+                  <SettingsModal defaultAutoStopHours={user.autoStopThresholdHours ?? 8} />
+                </div>
               </SidebarMenuButton>
             </SidebarMenuItem>
           </SidebarMenu>
@@ -269,7 +306,11 @@ export default function Home({ loaderData }: Route.ComponentProps) {
         </header>
 
         <div className="flex-1 p-6">
-          <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 max-w-6xl mx-auto w-full items-start">
+          <div className="max-w-6xl mx-auto w-full">
+            {pendingApprovals && pendingApprovals.length > 0 && (
+              <PendingApprovals approvals={pendingApprovals} />
+            )}
+            <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 items-start">
             <div className="xl:col-span-2 space-y-6">
               {groupedAssignments.length === 0 ? (
                 <Card className="border-dashed shadow-none">
@@ -301,6 +342,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 
             <div className="xl:col-span-1 sticky top-24">
               <ActiveTimerCard activeTimer={activeTimer} />
+            </div>
             </div>
           </div>
         </div>
