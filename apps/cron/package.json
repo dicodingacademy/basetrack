@@ -1,5 +1,5 @@
 {
-  "name": "ws",
+  "name": "@basetrack/cron",
   "version": "1.0.0",
   "private": true,
   "type": "module",
@@ -9,7 +9,8 @@
     "dev": "nodemon index.js"
   },
   "dependencies": {
-    "ws": "^8.16.0"
+    "node-cron": "^3.0.3",
+    "@basetrack/db": "*"
   },
   "devDependencies": {
     "nodemon": "^3.0.3"
