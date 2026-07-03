@@ -73,3 +73,59 @@ export async function stopTimer(userId: string, basecampId: string) {
   await prisma.activeTimer.delete({ where: { userId } });
   return { success: true };
 }
+
+export async function getPendingApprovals(userId: string) {
+  return await prisma.timeEntry.findMany({
+    where: {
+      userId,
+      syncStatus: "NEEDS_APPROVAL",
+    },
+    orderBy: {
+      createdAt: "desc",
+    },
+  });
+}
+
+export async function approveTimeEntry(
+  userId: string,
+  entryId: string,
+  basecampId: string,
+  updatedDurationSec: number
+) {
+  const entry = await prisma.timeEntry.findFirst({
+    where: { id: entryId, userId, syncStatus: "NEEDS_APPROVAL" },
+  });
+
+  if (!entry) throw new Error("Entry not found or already approved");
+
+  const durationHours = updatedDurationSec / 3600;
+  let newStatus: "PENDING" | "SYNCED" | "FAILED";
+
+  try {
+    const accessToken = await getValidAccessToken(userId);
+    const stoppedAt = entry.stoppedAt;
+    const yyyy = stoppedAt.getFullYear();
+    const mm = String(stoppedAt.getMonth() + 1).padStart(2, "0");
+    const dd = String(stoppedAt.getDate()).padStart(2, "0");
+
+    await createTimesheetEntry(basecampId, entry.todoId, accessToken, {
+      date: `${yyyy}-${mm}-${dd}`,
+      hours: Number(durationHours.toFixed(2)),
+      description: "Tracked via BaseTrack",
+    });
+    newStatus = "SYNCED";
+  } catch (err) {
+    console.error("Failed to sync timesheet entry on approval:", err);
+    newStatus = "FAILED";
+  }
+
+  await prisma.timeEntry.update({
+    where: { id: entryId },
+    data: {
+      durationSec: updatedDurationSec,
+      syncStatus: newStatus,
+    },
+  });
+
+  return { success: true, status: newStatus };
+}
