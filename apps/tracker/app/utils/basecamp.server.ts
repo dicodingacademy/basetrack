@@ -1,5 +1,4 @@
-import { redirect } from "react-router";
-import { getSession } from "./session.server";
+
 import { prisma } from "./db.server";
 
 const CLIENT_ID = process.env.BASECAMP_CLIENT_ID;
@@ -124,6 +123,22 @@ export async function fetchAssignments(accountId: string, accessToken: string) {
   }
 
   return response.json();
+}
+
+export async function fetchProjectDetails(accountId: string, bucketIds: string[], accessToken: string) {
+  const promises = bucketIds.map(async (id) => {
+    const response = await fetch(`https://3.basecampapi.com/${accountId}/projects/${id}.json`, {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "User-Agent": "BaseTrack (app@basetrack.local)",
+      },
+    });
+    if (!response.ok) return null;
+    return response.json();
+  });
+
+  const results = await Promise.all(promises);
+  return results.filter(Boolean);
 }
 
 export async function createTimesheetEntry(

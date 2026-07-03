@@ -1,4 +1,5 @@
 import { createCookieSessionStorage } from "react-router";
+import { prisma } from "./db.server";
 
 const SESSION_SECRET = process.env.SESSION_SECRET;
 
@@ -18,3 +19,12 @@ export const sessionStorage = createCookieSessionStorage({
 });
 
 export const { getSession, commitSession, destroySession } = sessionStorage;
+
+export async function getUserFromSessionId(sessionId: string | null) {
+  if (!sessionId) return null;
+  const dbSession = await prisma.session.findUnique({
+    where: { id: sessionId },
+    include: { user: true },
+  });
+  return dbSession?.user || null;
+}
