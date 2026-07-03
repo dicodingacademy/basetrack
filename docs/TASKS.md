@@ -77,15 +77,13 @@ Berdasarkan `docs/PRD.md`, berikut adalah ekstraksi tugas (tasks) yang detail da
   - Tambahkan section di Dashboard untuk menampilkan daftar `TimeEntry` berstatus `NEEDS_APPROVAL`.
   - User bisa mengedit durasi/jam, lalu klik "Approve & Sync" untuk mengubahnya menjadi `PENDING` dan dikirim ke Basecamp.
 
-## Phase 7: Background Sync ke Basecamp
-- [ ] **Task 7.1: Sync Worker / Action**
-  - Buat sistem untuk memproses `TimeEntry` yang berstatus `PENDING`.
-  - Ambil `TimeEntry` dari DB, dan panggil API *Task 4.2* untuk membuat timesheet di Basecamp.
-- [ ] **Task 7.2: Handle Sync Result**
-  - Jika Sukses: Update `SyncStatus` menjadi `SYNCED` dan simpan `basecampEntryId`.
-  - Jika Gagal: Update menjadi `FAILED`.
-- [ ] **Task 7.3: Retry Mechanism**
-  - Buat logika untuk melakukan retry (maksimal 3x) pada entry yang `FAILED` sebelum akhirnya diabaikan atau butuh intervensi manual.
+## Phase 7: Sync ke Basecamp (Selesai secara Synchronous)
+- [x] **Task 7.1: Sync Worker / Action**
+  - Diimplementasikan secara langsung (synchronous) pada aksi `stopTimer` dan `approveTimeEntry`.
+- [x] **Task 7.2: Handle Sync Result**
+  - Database langsung diupdate menjadi `SYNCED` atau `FAILED` sesuai hasil respons dari Basecamp API.
+- [x] **Task 7.3: Retry Mechanism**
+  - Di-skip untuk V1. Jika gagal, User bisa melakukan penyesuaian manual (atau fitur retry bisa ditambahkan di versi berikutnya).
 
 ---
 *Catatan: Open questions dari PRD (seperti retry strategy detail atau endpoint assignment) dapat dievaluasi lebih dalam saat memasuki Phase 4 dan Phase 7.*
