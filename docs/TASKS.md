@@ -66,20 +66,16 @@ Berdasarkan `docs/PRD.md`, berikut adalah ekstraksi tugas (tasks) yang detail da
   - Buat action route saat user klik "Stop".
   - Logika: Ambil `ActiveTimer`, hapus dari DB, lalu insert ke tabel `TimeEntry` dengan status `PENDING` dan `stopReason: MANUAL`.
 
-## Phase 6: WebSocket Sync & Auto-Stop
-- [ ] **Task 6.1: WebSocket Client (Browser)**
-  - Hubungkan React app ke WebSocket server pada saat komponen mounting.
-  - Implementasikan handler untuk menerima broadcast state timer dari server.
-- [ ] **Task 6.2: Ping-Pong Mechanism**
-  - WS Server: Kirim pesan "PING" ke client setiap 1 menit.
-  - WS Client: Balas dengan pesan "PONG".
-  - WS Server: Update field `lastPingAt` di `ActiveTimer` saat menerima "PONG".
-- [ ] **Task 6.3: Auto-Stop Cron / Worker (WS Server)**
-  - Buat interval di server yang berjalan setiap menit.
-  - Cari `ActiveTimer` yang `lastPingAt`-nya lebih lama dari 2 menit.
-  - Hapus timer tersebut dan ubah menjadi `TimeEntry` (status `PENDING`, `stopReason: WEBSOCKET_TIMEOUT`).
-- [ ] **Task 6.4: Multi-Tab Broadcast**
-  - Pastikan setiap perubahan (start/stop) memicu broadcast ke semua koneksi WS milik user yang sama, agar state antar-tab tetap sinkron.
+## Phase 6: Background Cron & Auto-Stop
+- [x] **Task 6.1: Setup Cron Server**
+  - Repurpose `apps/ws` menjadi `apps/cron` (atau biarkan sebagai worker service).
+  - Setup `node-cron` atau `setInterval` untuk berjalan setiap menit.
+- [x] **Task 6.2: Auto-Stop Logic**
+  - Worker mencari `ActiveTimer` yang durasinya (`Date.now() - startedAt`) sudah melebihi `autoStopThresholdHours` milik `User`.
+  - Hapus timer tersebut dan ubah menjadi `TimeEntry` dengan status `syncStatus: NEEDS_APPROVAL` dan `stopReason: AUTO_STOPPED`.
+- [x] **Task 6.3: UI Pending Approval**
+  - Tambahkan section di Dashboard untuk menampilkan daftar `TimeEntry` berstatus `NEEDS_APPROVAL`.
+  - User bisa mengedit durasi/jam, lalu klik "Approve & Sync" untuk mengubahnya menjadi `PENDING` dan dikirim ke Basecamp.
 
 ## Phase 7: Background Sync ke Basecamp
 - [ ] **Task 7.1: Sync Worker / Action**

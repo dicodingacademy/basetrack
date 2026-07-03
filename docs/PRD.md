@@ -46,9 +46,8 @@ Akibatnya, pencatatan waktu sering tidak akurat atau bahkan tidak dilakukan sama
 > **US-05:** Sebagai user, saya bisa klik "Stop" untuk menghentikan timer yang sedang berjalan.
 
 ### Auto-stop
-> **US-06:** Sebagai system, jika WebSocket client tidak membalas ping selama >2 menit, timer aktif otomatis di-stop dan sesi disimpan ke database.
-
-> **US-07:** Sebagai user, jika saya membuka app di dua tab, kedua tab terkoneksi ke WebSocket server dan timer state selalu sinkron dari database.
+> **US-06:** Sebagai system, cron job berjalan berkala untuk mengecek timer yang aktif melebihi batas waktu (misal > 8 jam).
+> **US-07:** Sebagai system, jika timer melebihi batas waktu, otomatis dihentikan dan masuk ke status `NEEDS_APPROVAL`.
 
 ### Submit ke Basecamp
 > **US-08:** Sebagai user, setelah timer stop (manual atau auto), sesi time tracking di-submit otomatis ke Basecamp Timesheet dengan deskripsi berupa nama To-do item.
@@ -82,15 +81,15 @@ Akibatnya, pencatatan waktu sering tidak akurat atau bahkan tidak dilakukan sama
 | FR-09 | Timer menampilkan elapsed time dalam format `HH:MM:SS`, update setiap detik |
 | FR-10 | State timer (To-do yang aktif, `started_at`) disimpan di Postgres |
 
-### 5.4 WebSocket Auto-stop
+### 5.4 Cron Auto-stop
 
 | ID | Requirement |
 |----|-------------|
-| FR-11 | WebSocket server berjalan sebagai **standalone service terpisah** dari React Router server |
-| FR-12 | Server mengirim ping ke client setiap **1 menit** |
-| FR-13 | Jika client tidak membalas dalam **2 menit**, server menandai sesi sebagai `stopped` di database |
-| FR-14 | Saat koneksi WebSocket terputus, timer UI menampilkan status "Disconnected" |
-| FR-15 | Saat koneksi WebSocket kembali (reconnect), client mengambil state terkini dari database |
+| FR-11 | Terdapat Worker / Cron Service terpisah yang mengecek setiap menit |
+| FR-12 | Mencari `ActiveTimer` yang telah berjalan melebihi `autoStopThresholdHours` milik User |
+| FR-13 | Menghapus timer tersebut dan menyimpannya sebagai `TimeEntry` dengan status `NEEDS_APPROVAL` |
+| FR-14 | `stopReason` di-set menjadi `AUTO_STOPPED` |
+| FR-15 | User harus meng-approve time entry ini via UI sebelum di-sync ke Basecamp |
 
 ### 5.5 Multi-tab Behavior
 
@@ -145,7 +144,7 @@ model ActiveTimer {
   projectId   String               // Basecamp Project ID
   projectName String
   startedAt   DateTime @default(now())
-  lastPingAt  DateTime @default(now())  // updated tiap pong dari client
+  lastPingAt  DateTime @default(now())
 }
 
 model TimeEntry {
@@ -159,8 +158,8 @@ model TimeEntry {
   startedAt     DateTime
   stoppedAt     DateTime
   durationSec   Int
-  stopReason    StopReason      // MANUAL | WEBSOCKET_TIMEOUT
-  syncStatus    SyncStatus      // PENDING | SYNCED | FAILED
+  stopReason    StopReason      // MANUAL | AUTO_STOPPED
+  syncStatus    SyncStatus      // NEEDS_APPROVAL | PENDING | SYNCED | FAILED
   basecampEntryId String?       // ID dari Basecamp setelah berhasil sync
   createdAt     DateTime        @default(now())
 }
@@ -168,9 +167,11 @@ model TimeEntry {
 enum StopReason {
   MANUAL
   WEBSOCKET_TIMEOUT
+  AUTO_STOPPED
 }
 
 enum SyncStatus {
+  NEEDS_APPROVAL
   PENDING
   SYNCED
   FAILED
@@ -193,15 +194,13 @@ enum SyncStatus {
                  │ HTTP              │ WebSocket
                  ▼                   ▼
 ┌────────────────────┐   ┌──────────────────────────┐
-│  React Router v7   │   │   WebSocket Server        │
+│  React Router v7   │   │     Worker / Cron         │
 │  (Node.js server)  │   │   (Standalone service)    │
 │                    │   │                           │
-│  - Auth (OAuth)    │   │  - Ping setiap 1 menit    │
-│  - API routes      │   │  - Grace period 2 menit   │
-│  - Loaders/Actions │   │  - Auto-stop on timeout   │
-│  - Basecamp API    │   │  - Broadcast ke semua     │
-│    integration     │   │    tab user yang sama     │
-└────────────┬───────┘   └────────────┬─────────────┘
+│  - Auth (OAuth)    │   │  - Berjalan tiap menit    │
+│  - API routes      │   │  - Cek ActiveTimer > X hr │
+│  - Prisma Client   │   │  - Stop ke NEEDS_APPROVAL │
+└────────────────────┘   └──────────────────────────┘
              │                         │
              └──────────┬──────────────┘
                         ▼
