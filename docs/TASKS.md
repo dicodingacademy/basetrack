@@ -53,16 +53,16 @@ Berdasarkan `docs/PRD.md`, berikut adalah ekstraksi tugas (tasks) yang detail da
   - (Sesuai catatan PRD, pelajari payload yang benar untuk create timesheet entry dari API spec `timesheets.md`).
 
 ## Phase 5: UI/UX - Dashboard & Timer
-- [ ] **Task 5.1: Build Dashboard Layout**
+- [x] **Task 5.1: Build Dashboard Layout**
   - Buat halaman utama dengan loader yang memanggil *Task 4.1*.
   - Tampilkan To-do list dan kelompokkan berdasarkan Project.
-- [ ] **Task 5.2: Komponen Timer**
+- [x] **Task 5.2: Komponen Timer**
   - Buat UI button "Start" dan "Stop".
   - Buat komponen display elapsed time (`HH:MM:SS`) yang berjalan setiap detik di sisi client jika timer aktif.
-- [ ] **Task 5.3: Start Timer Action**
+- [x] **Task 5.3: Start Timer Action**
   - Buat action route di React Router saat user klik "Start".
   - Logika: Hapus `ActiveTimer` lama (jika ada), lalu insert `ActiveTimer` baru ke database.
-- [ ] **Task 5.4: Stop Timer Action**
+- [x] **Task 5.4: Stop Timer Action**
   - Buat action route saat user klik "Stop".
   - Logika: Ambil `ActiveTimer`, hapus dari DB, lalu insert ke tabel `TimeEntry` dengan status `PENDING` dan `stopReason: MANUAL`.
 
