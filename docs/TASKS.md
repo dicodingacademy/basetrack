@@ -1,0 +1,91 @@
+# Implementation Tasks: Basecamp Time Tracker
+
+Berdasarkan `docs/PRD.md`, berikut adalah ekstraksi tugas (tasks) yang detail dan diurutkan secara logis agar proses implementasi lebih mudah dilakukan.
+
+## Phase 1: Project Setup & Monorepo Infrastructure
+- [ ] **Task 1.1: Setup NPM Workspaces**
+  - Inisialisasi root `package.json` dengan konfigurasi `npm workspaces` (misal: `"workspaces": ["apps/*", "packages/*"]`).
+  - Siapkan folder `apps/` (untuk service utama) dan `packages/` (untuk shared logic/config jika diperlukan).
+- [ ] **Task 1.2: Setup Tracker App (React Router v7)**
+  - Inisialisasi project React Router v7 (framework mode) di dalam folder `apps/tracker`.
+  - Install dan konfigurasi Tailwind CSS beserta `shadcn/ui` di `apps/tracker`.
+- [ ] **Task 1.3: Setup Standalone WebSocket Server**
+  - Inisialisasi service Node.js terpisah di dalam folder `apps/ws` untuk WebSocket (menggunakan `ws` atau `socket.io`), berjalan di port `3001`.
+- [ ] **Task 1.4: Setup Database & ORM**
+  - Buat `docker-compose.yml` di root project untuk PostgreSQL.
+  - Install Prisma ORM. (Sangat disarankan menempatkan Prisma di root atau shared package agar tipe DB bisa dipakai bersama oleh `tracker` dan `ws`).
+
+## Phase 2: Database Schema & Models
+- [ ] **Task 2.1: Definisikan Prisma Schema**
+  - Buat model `User` (termasuk access/refresh token & expiration).
+  - Buat model `Session` untuk manajemen login.
+  - Buat model `ActiveTimer` (1 to 1 relation dengan User).
+  - Buat model `TimeEntry` dengan enum `StopReason` (MANUAL, WEBSOCKET_TIMEOUT) dan `SyncStatus` (PENDING, SYNCED, FAILED).
+- [ ] **Task 2.2: Database Migration**
+  - Jalankan Prisma migration untuk membuat tabel-tabel di database Postgres.
+
+## Phase 3: Basecamp OAuth & Authentication
+- [ ] **Task 3.1: Konfigurasi Launchpad App**
+  - Setup OAuth App di 37signals Launchpad untuk mendapatkan `client_id` dan `client_secret`.
+  - Simpan secrets di file `.env`.
+- [ ] **Task 3.2: Implementasi Login Route**
+  - Buat endpoint/route untuk redirect user ke URL authorization Launchpad (`/authorization/new`).
+- [ ] **Task 3.3: Implementasi OAuth Callback**
+  - Buat handler untuk menerima `code` dari Launchpad.
+  - Lakukan POST request untuk menukar `code` dengan `access_token` dan `refresh_token`.
+- [ ] **Task 3.4: Fetch Account Info & Create Session**
+  - Gunakan access token untuk fetch `GET /authorization.json`.
+  - Ambil Account ID (product: "bc3").
+  - Simpan/Update data `User` di database (termasuk token) dan buat record `Session`.
+- [ ] **Task 3.5: Token Refresh Logic (Utility)**
+  - Buat helper function untuk cek apakah token expired dan jalankan refresh token flow jika diperlukan sebelum API call ke Basecamp.
+
+## Phase 4: Basecamp API Integrations (Server-side)
+- [ ] **Task 4.1: Fetch My Assignments API**
+  - Implementasi fungsi untuk memanggil `GET /my/assignments.json`.
+  - Parsing response dan ekstrak `priorities` & `non_priorities`.
+- [ ] **Task 4.2: Create Timesheet API**
+  - Implementasi fungsi untuk memanggil `POST /recordings/{RECORDING_ID}/timesheet/entries.json`.
+  - (Sesuai catatan PRD, pelajari payload yang benar untuk create timesheet entry dari API spec `timesheets.md`).
+
+## Phase 5: UI/UX - Dashboard & Timer
+- [ ] **Task 5.1: Build Dashboard Layout**
+  - Buat halaman utama dengan loader yang memanggil *Task 4.1*.
+  - Tampilkan To-do list dan kelompokkan berdasarkan Project.
+- [ ] **Task 5.2: Komponen Timer**
+  - Buat UI button "Start" dan "Stop".
+  - Buat komponen display elapsed time (`HH:MM:SS`) yang berjalan setiap detik di sisi client jika timer aktif.
+- [ ] **Task 5.3: Start Timer Action**
+  - Buat action route di React Router saat user klik "Start".
+  - Logika: Hapus `ActiveTimer` lama (jika ada), lalu insert `ActiveTimer` baru ke database.
+- [ ] **Task 5.4: Stop Timer Action**
+  - Buat action route saat user klik "Stop".
+  - Logika: Ambil `ActiveTimer`, hapus dari DB, lalu insert ke tabel `TimeEntry` dengan status `PENDING` dan `stopReason: MANUAL`.
+
+## Phase 6: WebSocket Sync & Auto-Stop
+- [ ] **Task 6.1: WebSocket Client (Browser)**
+  - Hubungkan React app ke WebSocket server pada saat komponen mounting.
+  - Implementasikan handler untuk menerima broadcast state timer dari server.
+- [ ] **Task 6.2: Ping-Pong Mechanism**
+  - WS Server: Kirim pesan "PING" ke client setiap 1 menit.
+  - WS Client: Balas dengan pesan "PONG".
+  - WS Server: Update field `lastPingAt` di `ActiveTimer` saat menerima "PONG".
+- [ ] **Task 6.3: Auto-Stop Cron / Worker (WS Server)**
+  - Buat interval di server yang berjalan setiap menit.
+  - Cari `ActiveTimer` yang `lastPingAt`-nya lebih lama dari 2 menit.
+  - Hapus timer tersebut dan ubah menjadi `TimeEntry` (status `PENDING`, `stopReason: WEBSOCKET_TIMEOUT`).
+- [ ] **Task 6.4: Multi-Tab Broadcast**
+  - Pastikan setiap perubahan (start/stop) memicu broadcast ke semua koneksi WS milik user yang sama, agar state antar-tab tetap sinkron.
+
+## Phase 7: Background Sync ke Basecamp
+- [ ] **Task 7.1: Sync Worker / Action**
+  - Buat sistem untuk memproses `TimeEntry` yang berstatus `PENDING`.
+  - Ambil `TimeEntry` dari DB, dan panggil API *Task 4.2* untuk membuat timesheet di Basecamp.
+- [ ] **Task 7.2: Handle Sync Result**
+  - Jika Sukses: Update `SyncStatus` menjadi `SYNCED` dan simpan `basecampEntryId`.
+  - Jika Gagal: Update menjadi `FAILED`.
+- [ ] **Task 7.3: Retry Mechanism**
+  - Buat logika untuk melakukan retry (maksimal 3x) pada entry yang `FAILED` sebelum akhirnya diabaikan atau butuh intervensi manual.
+
+---
+*Catatan: Open questions dari PRD (seperti retry strategy detail atau endpoint assignment) dapat dievaluasi lebih dalam saat memasuki Phase 4 dan Phase 7.*
