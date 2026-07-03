@@ -12,3 +12,65 @@ datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
 }
+
+model User {
+  id             String       @id @default(cuid())
+  basecampId     String       @unique
+  name           String
+  email          String
+  accessToken    String
+  refreshToken   String
+  tokenExpiresAt DateTime
+  createdAt      DateTime     @default(now())
+  sessions       Session[]
+  timeEntries    TimeEntry[]
+  activeTimer    ActiveTimer?
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+}
+
+model ActiveTimer {
+  id          String   @id @default(cuid())
+  userId      String   @unique
+  user        User     @relation(fields: [userId], references: [id])
+  todoId      String
+  todoTitle   String
+  projectId   String
+  projectName String
+  startedAt   DateTime @default(now())
+  lastPingAt  DateTime @default(now())
+}
+
+model TimeEntry {
+  id              String     @id @default(cuid())
+  userId          String
+  user            User       @relation(fields: [userId], references: [id])
+  todoId          String
+  todoTitle       String
+  projectId       String
+  projectName     String
+  startedAt       DateTime
+  stoppedAt       DateTime
+  durationSec     Int
+  stopReason      StopReason
+  syncStatus      SyncStatus
+  basecampEntryId String?
+  createdAt       DateTime   @default(now())
+}
+
+enum StopReason {
+  MANUAL
+  WEBSOCKET_TIMEOUT
+}
+
+enum SyncStatus {
+  PENDING
+  SYNCED
+  FAILED
+}
