@@ -8,7 +8,46 @@ services:
     ports:
       - "5433:5432"
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      - ./postgres-data:/var/lib/postgresql/data
+    networks:
+      - tunnel_network
 
-volumes:
-  pgdata:
+  tracker:
+    image: basetrack-tracker:latest
+    ports:
+      - "3000:3000"
+    env_file:
+      - apps/tracker/.env
+    environment:
+      - DATABASE_URL=postgresql://basetrack:password@db:5432/basetrack?schema=public
+    depends_on:
+      - db
+    networks:
+      - tunnel_network
+
+  cron:
+    image: basetrack-cron:latest
+    env_file:
+      - apps/tracker/.env
+    environment:
+      - DATABASE_URL=postgresql://basetrack:password@db:5432/basetrack?schema=public
+    depends_on:
+      - db
+    networks:
+      - tunnel_network
+
+# Uncomment this section if you want to run cloudflared directly via docker-compose
+#  cloudflared:
+#    image: cloudflare/cloudflared:latest
+#    command: tunnel run
+#    environment:
+#      - TUNNEL_TOKEN=your_cloudflare_tunnel_token_here
+#    networks:
+#      - tunnel_network
+#    restart: always
+
+networks:
+  tunnel_network:
+    name: basetrack_tunnel_network
+    driver: bridge
+
