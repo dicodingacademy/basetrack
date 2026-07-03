@@ -25,26 +25,30 @@ Berdasarkan `docs/PRD.md`, berikut adalah ekstraksi tugas (tasks) yang detail da
   - Jalankan Prisma migration untuk membuat tabel-tabel di database Postgres.
 
 ## Phase 3: Basecamp OAuth & Authentication
-- [ ] **Task 3.1: Konfigurasi Launchpad App**
+- [x] **Task 3.1: Konfigurasi Launchpad App**
   - Setup OAuth App di 37signals Launchpad untuk mendapatkan `client_id` dan `client_secret`.
   - Simpan secrets di file `.env`.
-- [ ] **Task 3.2: Implementasi Login Route**
-  - Buat endpoint/route untuk redirect user ke URL authorization Launchpad (`/authorization/new`).
-- [ ] **Task 3.3: Implementasi OAuth Callback**
+- [x] **Task 3.2: Implementasi Login Route**
+  - Buat endpoint/route untuk redirect user ke URL authorization Launchpad:
+    `GET https://launchpad.37signals.com/authorization/new?type=web_server&client_id=...&redirect_uri=...`
+- [x] **Task 3.3: Implementasi OAuth Callback**
   - Buat handler untuk menerima `code` dari Launchpad.
-  - Lakukan POST request untuk menukar `code` dengan `access_token` dan `refresh_token`.
-- [ ] **Task 3.4: Fetch Account Info & Create Session**
-  - Gunakan access token untuk fetch `GET /authorization.json`.
-  - Ambil Account ID (product: "bc3").
+  - Lakukan pertukaran token:
+    `POST https://launchpad.37signals.com/authorization/token` (dengan grant_type `authorization_code`).
+- [x] **Task 3.4: Fetch Account Info & Create Session**
+  - Ambil data akun Basecamp:
+    `GET https://launchpad.37signals.com/authorization.json`
+  - Ambil Account ID (product: "bc3") dan gunakan URL `href`-nya sebagai base URL API.
   - Simpan/Update data `User` di database (termasuk token) dan buat record `Session`.
-- [ ] **Task 3.5: Token Refresh Logic (Utility)**
-  - Buat helper function untuk cek apakah token expired dan jalankan refresh token flow jika diperlukan sebelum API call ke Basecamp.
+- [x] **Task 3.5: Token Refresh Logic (Utility)**
+  - Buat helper function untuk melakukan refresh token jika access_token mendekati expired:
+    `POST https://launchpad.37signals.com/authorization/token` (dengan grant_type `refresh_token`).
 
 ## Phase 4: Basecamp API Integrations (Server-side)
-- [ ] **Task 4.1: Fetch My Assignments API**
+- [x] **Task 4.1: Fetch My Assignments API**
   - Implementasi fungsi untuk memanggil `GET /my/assignments.json`.
   - Parsing response dan ekstrak `priorities` & `non_priorities`.
-- [ ] **Task 4.2: Create Timesheet API**
+- [x] **Task 4.2: Create Timesheet API**
   - Implementasi fungsi untuk memanggil `POST /recordings/{RECORDING_ID}/timesheet/entries.json`.
   - (Sesuai catatan PRD, pelajari payload yang benar untuk create timesheet entry dari API spec `timesheets.md`).
 
