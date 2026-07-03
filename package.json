@@ -9,7 +9,8 @@
   "scripts": {
     "dev": "concurrently \"npm run dev -w apps-tracker\" \"npm run dev -w ws\"",
     "build": "npm run build --workspaces --if-present",
-    "db:migrate": "npm run db:migrate --workspace=db"
+    "db:migrate": "npm run db:migrate --workspace=db",
+    "db:studio": "npm run db:studio --workspace=db"
   },
   "devDependencies": {
     "concurrently": "^10.0.3"
