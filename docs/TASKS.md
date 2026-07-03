@@ -3,25 +3,25 @@
 Berdasarkan `docs/PRD.md`, berikut adalah ekstraksi tugas (tasks) yang detail dan diurutkan secara logis agar proses implementasi lebih mudah dilakukan.
 
 ## Phase 1: Project Setup & Monorepo Infrastructure
-- [ ] **Task 1.1: Setup NPM Workspaces**
+- [x] **Task 1.1: Setup NPM Workspaces**
   - Inisialisasi root `package.json` dengan konfigurasi `npm workspaces` (misal: `"workspaces": ["apps/*", "packages/*"]`).
   - Siapkan folder `apps/` (untuk service utama) dan `packages/` (untuk shared logic/config jika diperlukan).
-- [ ] **Task 1.2: Setup Tracker App (React Router v7)**
+- [x] **Task 1.2: Setup Tracker App (React Router v7)**
   - Inisialisasi project React Router v7 (framework mode) di dalam folder `apps/tracker`.
   - Install dan konfigurasi Tailwind CSS beserta `shadcn/ui` di `apps/tracker`.
-- [ ] **Task 1.3: Setup Standalone WebSocket Server**
+- [x] **Task 1.3: Setup Standalone WebSocket Server**
   - Inisialisasi service Node.js terpisah di dalam folder `apps/ws` untuk WebSocket (menggunakan `ws` atau `socket.io`), berjalan di port `3001`.
-- [ ] **Task 1.4: Setup Database & ORM**
+- [x] **Task 1.4: Setup Database & ORM**
   - Buat `docker-compose.yml` di root project untuk PostgreSQL.
   - Install Prisma ORM. (Sangat disarankan menempatkan Prisma di root atau shared package agar tipe DB bisa dipakai bersama oleh `tracker` dan `ws`).
 
 ## Phase 2: Database Schema & Models
-- [ ] **Task 2.1: Definisikan Prisma Schema**
+- [x] **Task 2.1: Definisikan Prisma Schema**
   - Buat model `User` (termasuk access/refresh token & expiration).
   - Buat model `Session` untuk manajemen login.
   - Buat model `ActiveTimer` (1 to 1 relation dengan User).
   - Buat model `TimeEntry` dengan enum `StopReason` (MANUAL, WEBSOCKET_TIMEOUT) dan `SyncStatus` (PENDING, SYNCED, FAILED).
-- [ ] **Task 2.2: Database Migration**
+- [x] **Task 2.2: Database Migration**
   - Jalankan Prisma migration untuk membuat tabel-tabel di database Postgres.
 
 ## Phase 3: Basecamp OAuth & Authentication
