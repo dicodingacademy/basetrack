@@ -23,8 +23,9 @@ model User {
   tokenExpiresAt DateTime
   createdAt      DateTime     @default(now())
   sessions       Session[]
-  timeEntries    TimeEntry[]
-  activeTimer    ActiveTimer?
+  timeEntries            TimeEntry[]
+  activeTimer            ActiveTimer?
+  autoStopThresholdHours Int          @default(8)
 }
 
 model Session {
