@@ -43,12 +43,13 @@ export function TaskCard({ task, selectedProject, activeTimer }: TaskProps) {
         <Button type="submit" disabled={isActive} variant={isActive ? "secondary" : "default"} size="sm">
           {isActive ? (
             <>
-              <Clock className="w-3.5 h-3.5 mr-2 animate-pulse" />{" "}
+              <Clock className="w-3.5 h-3.5 mr-2 animate-pulse" />
               <LiveTimer startedAt={activeTimer!.startedAt} />
             </>
           ) : (
             <>
-              <Play className="w-3.5 h-3.5 mr-2" /> Start Timer
+              <Play className="w-3.5 h-3.5 mr-2" />
+              <span>Start Timer</span>
             </>
           )}
         </Button>
