@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { useNavigation } from "react-router";
+import { useState, useEffect } from "react";
+import { useNavigation, useRevalidator } from "react-router";
 
 import type { Route } from "./+types/home";
 import { getSession, getUserFromSessionId } from "../utils/session.server";
@@ -209,6 +209,19 @@ export default function Home({ loaderData }: Route.ComponentProps) {
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(
     groupedAssignments.length > 0 ? groupedAssignments[0].projectId : null
   );
+
+  const revalidator = useRevalidator();
+  
+  useEffect(() => {
+    // Poll the server every 10 seconds to keep the UI in sync 
+    // with external changes (e.g. from the Desktop App)
+    const interval = setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        revalidator.revalidate();
+      }
+    }, 10000);
+    return () => clearInterval(interval);
+  }, [revalidator]);
 
   if (!user) {
     return (
