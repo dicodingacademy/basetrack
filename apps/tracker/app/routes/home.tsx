@@ -102,6 +102,11 @@ export async function loader({ request }: Route.LoaderArgs) {
           name: a.name,
           avatarUrl: a.avatar_url,
         })) || [],
+        parent: curr.parent ? {
+          id: curr.parent.id,
+          title: curr.parent.title,
+          type: curr.parent.type,
+        } : undefined,
       });
       return acc;
     }, {});

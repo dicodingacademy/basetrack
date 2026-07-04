@@ -62,6 +62,12 @@ export function TaskCard({ task, selectedProject, activeTimer }: TaskProps) {
             <Badge key={idx} variant={badge.variant}>{badge.text}</Badge>
           ))}
           
+          {task.parent && (
+            <Badge variant="secondary" className="font-normal" title={task.parent.type === "Column" ? "Column" : "To-do List"}>
+              {task.parent.title}
+            </Badge>
+          )}
+          
           {task.dueOn && (
             <div className="flex items-center text-xs text-muted-foreground gap-1" title="Deadline">
               <Calendar className="w-3.5 h-3.5" />

@@ -9,6 +9,12 @@ export type BasecampAssignee = {
   avatar_url: string;
 };
 
+export type BasecampParent = {
+  id: number;
+  title: string;
+  type: string;
+};
+
 export type BasecampAssignment = {
   id: number;
   title?: string;
@@ -19,6 +25,7 @@ export type BasecampAssignment = {
   assignees?: BasecampAssignee[];
   completed?: boolean;
   status?: string;
+  parent?: BasecampParent;
 };
 
 export type BasecampProject = {
@@ -32,6 +39,7 @@ export type GroupedTask = {
   type: string;
   dueOn?: string | null;
   assignees?: { id: number; name: string; avatarUrl: string }[];
+  parent?: { id: number; title: string; type: string };
 };
 
 export type GroupedAssignment = {
