@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
-import { useNavigation, useRevalidator } from "react-router";
+import { useState } from "react";
+import { useNavigation } from "react-router";
 
 import type { Route } from "./+types/home";
 import { getSession, getUserFromSessionId } from "../utils/session.server";
@@ -9,6 +9,7 @@ import { Button } from "../components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "../components/ui/card";
 
 import { Avatar, AvatarFallback } from "../components/ui/avatar";
+import { useTimerWebSocket } from "../hooks/useTimerWebSocket";
 
 import {
   Sidebar,
@@ -116,6 +117,7 @@ export async function loader({ request }: Route.LoaderArgs) {
     groupedAssignments,
     activeTimer,
     pendingApprovals,
+    wsUrl: process.env.WS_PUBLIC_URL || "ws://localhost:8081",
   };
 }
 
@@ -183,7 +185,7 @@ export async function action({ request }: Route.ActionArgs) {
 }
 
 export default function Home({ loaderData }: Route.ComponentProps) {
-  const { user, groupedAssignments, activeTimer: serverActiveTimer, pendingApprovals } = loaderData;
+  let { user, groupedAssignments, activeTimer: serverActiveTimer, pendingApprovals, wsUrl } = loaderData;
   const navigation = useNavigation();
 
   let activeTimer = serverActiveTimer;
@@ -210,18 +212,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
     groupedAssignments.length > 0 ? groupedAssignments[0].projectId : null
   );
 
-  const revalidator = useRevalidator();
-  
-  useEffect(() => {
-    // Poll the server every 10 seconds to keep the UI in sync 
-    // with external changes (e.g. from the Desktop App)
-    const interval = setInterval(() => {
-      if (document.visibilityState === 'visible') {
-        revalidator.revalidate();
-      }
-    }, 10000);
-    return () => clearInterval(interval);
-  }, [revalidator]);
+  useTimerWebSocket(user?.desktopApiKey, wsUrl);
 
   if (!user) {
     return (
