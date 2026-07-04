@@ -33,14 +33,22 @@ export function TaskCard({ task, selectedProject, activeTimer }: TaskProps) {
     }
   }
   
+  const priorityBadges = extractedBadges.filter(b => ["HIGH", "MEDIUM", "LOW"].includes(b.text));
+  const otherBadges = extractedBadges.filter(b => !["HIGH", "MEDIUM", "LOW"].includes(b.text));
+
   const cleanTitle = task.title.replace(bracketRegex, "").trim();
 
   return (
     <div className={`group p-4 rounded-xl border flex gap-4 items-center justify-between transition-all hover:shadow-md ${isActive ? "border-primary/50 shadow-primary/10 ring-1 ring-primary/20 bg-primary/[0.02]" : "border-border/60"}`}>
       <div className="min-w-0 flex-1 pl-2 border-l-2 border-transparent group-hover:border-primary transition-colors">
-        <p className={`text-sm font-semibold truncate ${isActive ? "text-primary" : ""}`} title={cleanTitle}>
-          {cleanTitle}
-        </p>
+        <div className="flex items-center gap-2">
+          {priorityBadges.map((badge, idx) => (
+            <Badge key={idx} variant={badge.variant}>{badge.text}</Badge>
+          ))}
+          <p className={`text-sm font-semibold truncate ${isActive ? "text-primary" : ""}`} title={cleanTitle}>
+            {cleanTitle}
+          </p>
+        </div>
         <div className="flex flex-wrap items-center gap-2 mt-2">
           {task.assignees && task.assignees.length > 0 && (
             <AvatarGroup className="-space-x-1.5" title={task.assignees.map(a => a.name).join(", ")}>
@@ -58,7 +66,7 @@ export function TaskCard({ task, selectedProject, activeTimer }: TaskProps) {
             </AvatarGroup>
           )}
 
-          {extractedBadges.map((badge, idx) => (
+          {otherBadges.map((badge, idx) => (
             <Badge key={idx} variant={badge.variant}>{badge.text}</Badge>
           ))}
           
