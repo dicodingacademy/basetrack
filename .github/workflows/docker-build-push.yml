@@ -9,7 +9,42 @@ env:
   REGISTRY: ghcr.io
 
 jobs:
+  detect-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            tracker:
+              - 'apps/tracker/**'
+              - 'packages/**'
+              - 'package.json'
+              - 'package-lock.json'
+            cron:
+              - 'apps/cron/**'
+              - 'packages/**'
+              - 'package.json'
+              - 'package-lock.json'
+            ws:
+              - 'apps/ws/**'
+              - 'packages/**'
+              - 'package.json'
+              - 'package-lock.json'
+      - id: set-matrix
+        run: |
+          MATRIX="[]"
+          if [[ "${{ steps.filter.outputs.tracker }}" == "true" ]]; then MATRIX=$(echo $MATRIX | jq '. += ["tracker"]'); fi
+          if [[ "${{ steps.filter.outputs.cron }}" == "true" ]]; then MATRIX=$(echo $MATRIX | jq '. += ["cron"]'); fi
+          if [[ "${{ steps.filter.outputs.ws }}" == "true" ]]; then MATRIX=$(echo $MATRIX | jq '. += ["ws"]'); fi
+          echo "matrix=$MATRIX" >> $GITHUB_OUTPUT
+
   build-and-push:
+    needs: detect-changes
+    if: ${{ needs.detect-changes.outputs.matrix != '[]' && needs.detect-changes.outputs.matrix != '' }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -17,7 +52,7 @@ jobs:
     
     strategy:
       matrix:
-        service: [tracker, cron, ws]
+        service: ${{ fromJson(needs.detect-changes.outputs.matrix) }}
 
     steps:
       - name: Checkout repository
