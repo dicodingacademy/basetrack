@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@basetrack/db": "*",
+    "dotenv": "^17.4.2",
     "express": "^4.21.0",
     "ws": "^8.18.0"
   },

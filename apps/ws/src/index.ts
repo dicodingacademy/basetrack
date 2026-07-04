@@ -1,3 +1,4 @@
+import "dotenv/config";
 import { WebSocketServer, WebSocket } from "ws";
 import express from "express";
 import { PrismaClient } from "@prisma/client";
@@ -24,7 +25,7 @@ wss.on("connection", (ws) => {
         const apiKey = message.apiKey;
         if (!apiKey) {
           ws.send(JSON.stringify({ type: "ERROR", message: "API Key required" }));
-          ws.close(1008, "API Key required");
+          setTimeout(() => ws.close(1008, "API Key required"), 50);
           return;
         }
 
@@ -34,7 +35,7 @@ wss.on("connection", (ws) => {
 
         if (!user) {
           ws.send(JSON.stringify({ type: "ERROR", message: "Invalid API Key" }));
-          ws.close(1008, "Invalid API Key");
+          setTimeout(() => ws.close(1008, "Invalid API Key"), 50);
           return;
         }
 
@@ -42,6 +43,45 @@ wss.on("connection", (ws) => {
         activeClients.set(ws, user.id);
         ws.send(JSON.stringify({ type: "AUTH_SUCCESS", message: "Authenticated successfully" }));
         console.log(`WebSocket authenticated for user ${user.id}`);
+
+        // Fetch current active timer state to sync on launch
+        const activeTimer = await prisma.activeTimer.findUnique({
+          where: { userId: user.id }
+        });
+        
+        if (activeTimer) {
+          ws.send(JSON.stringify({ type: "TIMER_STARTED", timer: activeTimer }));
+        } else {
+          ws.send(JSON.stringify({ type: "TIMER_STOPPED" }));
+        }
+      } else if (message.type === "STOP_TIMER") {
+        if (!isAuthenticated) return;
+        const user = await prisma.user.findUnique({
+          where: { desktopApiKey: message.apiKey }
+        });
+        if (!user) return;
+
+        const activeTimer = await prisma.activeTimer.findUnique({
+          where: { userId: user.id }
+        });
+
+        if (activeTimer) {
+          const trackerUrl = process.env.TRACKER_INTERNAL_URL || "http://localhost:5173/api/internal/stop";
+          const internalKey = process.env.INTERNAL_API_KEY || "dev-internal-key-123";
+
+          try {
+            await fetch(trackerUrl, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                "x-internal-key": internalKey,
+              },
+              body: JSON.stringify({ userId: user.id, basecampId: user.basecampId }),
+            });
+          } catch (err) {
+            console.error("Failed to call internal stop API:", err);
+          }
+        }
       }
     } catch (e) {
       console.error("WebSocket message error:", e);
@@ -52,12 +92,12 @@ wss.on("connection", (ws) => {
     activeClients.delete(ws);
   });
 
-  // Timeout if not authenticated within 5 seconds
+  // Timeout if not authenticated within 15 seconds
   setTimeout(() => {
     if (!isAuthenticated && ws.readyState === WebSocket.OPEN) {
       ws.close(1008, "Authentication timeout");
     }
-  }, 5000);
+  }, 15000);
 });
 
 // Internal endpoint to trigger broadcasts from tracker or cron
@@ -91,6 +131,6 @@ app.post("/internal/broadcast", (req, res) => {
 });
 
 const PORT = process.env.PORT || 8081;
-server.listen(PORT, () => {
+server.listen(Number(PORT), () => {
   console.log(`WebSocket server running on port ${PORT}`);
 });
