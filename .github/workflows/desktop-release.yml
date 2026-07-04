@@ -86,7 +86,7 @@ jobs:
             - **Windows**: `.msi`, `.exe`
             - **macOS**: `.dmg`, `.app.tar.gz` (Intel & Apple Silicon)
             - **Linux**: `.deb`, `.rpm`, `.AppImage`
-          draft: true
+          draft: false
           prerelease: false
 
   release:
