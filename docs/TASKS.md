@@ -85,5 +85,56 @@ Berdasarkan `docs/PRD.md`, berikut adalah ekstraksi tugas (tasks) yang detail da
 - [x] **Task 7.3: Retry Mechanism**
   - Di-skip untuk V1. Jika gagal, User bisa melakukan penyesuaian manual (atau fitur retry bisa ditambahkan di versi berikutnya).
 
+## Phase 8: API Key Authentication (Backend & Web UI)
+- [x] **Task 8.1: Update Database Schema**
+  - Update `schema.prisma` untuk menambahkan kolom `desktopApiKey` pada entitas `User`.
+  - Jalankan `npm run db:migrate` untuk meng-apply perubahan.
+- [x] **Task 8.2: API Key Management API**
+  - Buat endpoint di `apps/tracker` untuk me-return API Key *current user*.
+  - Buat endpoint untuk me-reset/generate ulang API Key.
+- [x] **Task 8.3: Web Settings UI**
+  - Buat halaman/modal Settings di web dashboard.
+  - Tampilkan API Key ke user agar bisa di-copy ke Desktop App.
+
+## Phase 9: WebSocket Server Infrastructure (Backend)
+- [ ] **Task 9.1: Inisialisasi WebSocket Server**
+  - Install dependensi `ws` atau `socket.io` di `apps/tracker`.
+  - Mount WebSocket server ke dalam HTTP server instance yang sama dengan web.
+- [ ] **Task 9.2: WebSocket Authentication**
+  - Saat ada koneksi baru, wajibkan klien mengirim API Key. Validasi API Key tersebut terhadap tabel `User` di database.
+  - Tolak koneksi (disconnect) jika API Key tidak valid.
+- [ ] **Task 9.3: Event Broadcasting Logic**
+  - Buat mekanisme internal untuk melakukan *broadcast* event (misal: event `TIMER_STARTED`, `TIMER_STOPPED`).
+  - Update action route web (saat user tekan Start/Stop di browser) dan worker cron (saat auto-stop) agar memicu broadcast ini ke semua *client* WebSocket yang sedang login.
+
+## Phase 10: Desktop Companion App Initialization (Tauri)
+- [ ] **Task 10.1: Scaffold Project**
+  - Buat project React+Vite di `apps/desktop`.
+  - Install framework Tauri (`npm create tauri-app@latest`).
+  - Konfigurasi `package.json` agar terintegrasi dengan root *workspaces*.
+- [ ] **Task 10.2: Konfigurasi Native Window**
+  - Edit `tauri.conf.json`.
+  - Set ukuran window menjadi mini (contoh: 300x120px).
+  - Hilangkan tombol close/minimize bawaan OS (`decorations: false`).
+  - Set window selalu muncul di depan (`alwaysOnTop: true`).
+
+## Phase 11: Desktop Auth & WebSocket Client
+- [ ] **Task 11.1: API Key Form UI**
+  - Buat tampilan awal Desktop App yang meminta user memasukkan API Key dari Web.
+  - Simpan API Key secara persisten di lokal komputer (via `localStorage` atau Tauri store).
+- [ ] **Task 11.2: Koneksi WebSocket Client**
+  - Tulis logika di *frontend* Desktop untuk menghubungi WebSocket Server menggunakan API Key.
+  - Berikan indikator koneksi (titik hijau/merah) di UI desktop.
+- [ ] **Task 11.3: Reaksi Terhadap Event Server**
+  - Sinkronkan *state* lokal (durasi timer, teks project/to-do) jika WebSocket menerima broadcast `TIMER_STARTED` atau `TIMER_STOPPED`.
+
+## Phase 12: Desktop Timer Control (Write Operations)
+- [ ] **Task 12.1: UI Komponen Timer**
+  - Buat tombol "Start" dan "Stop" berukuran proporsional untuk *widget* desktop.
+  - Buat tampilan angka timer (`HH:MM:SS`) yang detiknya bertambah di sisi klien (optimistic UI).
+- [ ] **Task 12.2: Eksekusi Perintah ke Server**
+  - Saat tombol "Start"/"Stop" ditekan di desktop, kirim request ke API server web (dengan header Authorization berisi API Key) untuk memodifikasi database.
+  - Server yang memodifikasi database kemudian otomatis menjalankan *Task 9.3* (Broadcasting), sehingga Desktop dan Web tetap konsisten.
+
 ---
 *Catatan: Open questions dari PRD (seperti retry strategy detail atau endpoint assignment) dapat dievaluasi lebih dalam saat memasuki Phase 4 dan Phase 7.*
