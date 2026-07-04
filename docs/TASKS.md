@@ -107,24 +107,24 @@ Berdasarkan `docs/PRD.md`, berikut adalah ekstraksi tugas (tasks) yang detail da
   - Update action route web (saat user tekan Start/Stop di browser) dan worker cron (saat auto-stop) agar memicu broadcast ini ke semua *client* WebSocket yang sedang login.
 
 ## Phase 10: Desktop Companion App Initialization (Tauri)
-- [ ] **Task 10.1: Scaffold Project**
+- [x] **Task 10.1: Scaffold Project**
   - Buat project React+Vite di `apps/desktop`.
   - Install framework Tauri (`npm create tauri-app@latest`).
   - Konfigurasi `package.json` agar terintegrasi dengan root *workspaces*.
-- [ ] **Task 10.2: Konfigurasi Native Window**
+- [x] **Task 10.2: Konfigurasi Native Window**
   - Edit `tauri.conf.json`.
   - Set ukuran window menjadi mini (contoh: 300x120px).
   - Hilangkan tombol close/minimize bawaan OS (`decorations: false`).
   - Set window selalu muncul di depan (`alwaysOnTop: true`).
 
 ## Phase 11: Desktop Auth & WebSocket Client
-- [ ] **Task 11.1: API Key Form UI**
+- [x] **Task 11.1: API Key Form UI**
   - Buat tampilan awal Desktop App yang meminta user memasukkan API Key dari Web.
   - Simpan API Key secara persisten di lokal komputer (via `localStorage` atau Tauri store).
-- [ ] **Task 11.2: Koneksi WebSocket Client**
+- [x] **Task 11.2: Koneksi WebSocket Client**
   - Tulis logika di *frontend* Desktop untuk menghubungi WebSocket Server menggunakan API Key.
   - Berikan indikator koneksi (titik hijau/merah) di UI desktop.
-- [ ] **Task 11.3: Reaksi Terhadap Event Server**
+- [x] **Task 11.3: Reaksi Terhadap Event Server**
   - Sinkronkan *state* lokal (durasi timer, teks project/to-do) jika WebSocket menerima broadcast `TIMER_STARTED` atau `TIMER_STOPPED`.
 
 ## Phase 12: Desktop Timer Control (Write Operations)
