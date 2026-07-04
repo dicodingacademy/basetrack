@@ -83,9 +83,9 @@ jobs:
             Please download the appropriate installer for your operating system from the assets below.
             
             ### Supported Platforms
-            - **Windows**: `.msi`, `.exe`
-            - **macOS**: `.dmg`, `.app.tar.gz` (Intel & Apple Silicon)
-            - **Linux**: `.deb`, `.rpm`, `.AppImage`
+            - **Windows**: `.exe`
+            - **macOS**: `.dmg` (Intel & Apple Silicon)
+            - **Linux**: `.deb`
           draft: false
           prerelease: false
 
