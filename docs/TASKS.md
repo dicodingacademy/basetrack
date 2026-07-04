@@ -97,14 +97,13 @@ Berdasarkan `docs/PRD.md`, berikut adalah ekstraksi tugas (tasks) yang detail da
   - Tampilkan API Key ke user agar bisa di-copy ke Desktop App.
 
 ## Phase 9: WebSocket Server Infrastructure (Backend)
-- [ ] **Task 9.1: Inisialisasi WebSocket Server**
-  - Install dependensi `ws` atau `socket.io` di `apps/tracker`.
-  - Mount WebSocket server ke dalam HTTP server instance yang sama dengan web.
-- [ ] **Task 9.2: WebSocket Authentication**
+- [x] **Task 9.1: Inisialisasi WebSocket Server**
+  - Install dependensi `ws` di `apps/ws` sebagai service mandiri.
+- [x] **Task 9.2: WebSocket Authentication**
   - Saat ada koneksi baru, wajibkan klien mengirim API Key. Validasi API Key tersebut terhadap tabel `User` di database.
   - Tolak koneksi (disconnect) jika API Key tidak valid.
-- [ ] **Task 9.3: Event Broadcasting Logic**
-  - Buat mekanisme internal untuk melakukan *broadcast* event (misal: event `TIMER_STARTED`, `TIMER_STOPPED`).
+- [x] **Task 9.3: Event Broadcasting Logic**
+  - Buat mekanisme internal endpoint (`/internal/broadcast`) untuk melakukan *broadcast* event (`TIMER_STARTED`, `TIMER_STOPPED`).
   - Update action route web (saat user tekan Start/Stop di browser) dan worker cron (saat auto-stop) agar memicu broadcast ini ke semua *client* WebSocket yang sedang login.
 
 ## Phase 10: Desktop Companion App Initialization (Tauri)
