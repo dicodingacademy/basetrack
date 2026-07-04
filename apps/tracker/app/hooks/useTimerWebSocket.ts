@@ -3,8 +3,13 @@ import { useRevalidator } from "react-router";
 
 export function useTimerWebSocket(desktopApiKey?: string | null, wsUrl?: string) {
   const revalidator = useRevalidator();
+  const revalidateRef = useRef(revalidator.revalidate);
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    revalidateRef.current = revalidator.revalidate;
+  }, [revalidator.revalidate]);
 
   useEffect(() => {
     if (!desktopApiKey) return;
@@ -23,7 +28,9 @@ export function useTimerWebSocket(desktopApiKey?: string | null, wsUrl?: string)
         try {
           const message = JSON.parse(event.data);
           if (["TIMER_STOPPED", "TIMER_STARTED", "TIMER_AUTO_STOPPED"].includes(message.type)) {
-            revalidator.revalidate();
+            if (!message.isInitialSync) {
+              revalidateRef.current();
+            }
           }
         } catch (e) {
           console.error("Failed to parse WS message", e);
@@ -44,5 +51,5 @@ export function useTimerWebSocket(desktopApiKey?: string | null, wsUrl?: string)
       if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
       if (wsRef.current) wsRef.current.close();
     };
-  }, [desktopApiKey, wsUrl, revalidator]);
+  }, [desktopApiKey, wsUrl]);
 }
