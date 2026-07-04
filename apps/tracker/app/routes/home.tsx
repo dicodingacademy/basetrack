@@ -118,7 +118,7 @@ export async function loader({ request }: Route.LoaderArgs) {
       name: user.name, 
       email: user.email,
       autoStopThresholdHours: user.autoStopThresholdHours,
-      desktopApiKey: user.desktopApiKey
+      apiKey: user.apiKey
     },
     groupedAssignments,
     activeTimer,
@@ -182,7 +182,7 @@ export async function action({ request }: Route.ActionArgs) {
     const newApiKey = crypto.randomUUID();
     await prisma.user.update({
       where: { id: user.id },
-      data: { desktopApiKey: newApiKey }
+      data: { apiKey: newApiKey }
     });
     return { success: true };
   }
@@ -218,7 +218,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
     groupedAssignments.length > 0 ? groupedAssignments[0].projectId : null
   );
 
-  useTimerWebSocket(user?.desktopApiKey, wsUrl);
+  useTimerWebSocket(user?.apiKey, wsUrl);
 
   if (!user) {
     return (
@@ -305,7 +305,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
                 <div onClick={(e) => e.stopPropagation()}>
                   <SettingsModal 
                     defaultAutoStopHours={user.autoStopThresholdHours ?? 8} 
-                    desktopApiKey={user.desktopApiKey}
+                    apiKey={user.apiKey}
                   />
                 </div>
               </SidebarMenuButton>

@@ -16,10 +16,10 @@ import { Settings, Loader2 } from "lucide-react";
 
 type SettingsModalProps = {
   defaultAutoStopHours: number;
-  desktopApiKey?: string | null;
+  apiKey?: string | null;
 };
 
-export function SettingsModal({ defaultAutoStopHours, desktopApiKey }: SettingsModalProps) {
+export function SettingsModal({ defaultAutoStopHours, apiKey }: SettingsModalProps) {
   const [open, setOpen] = useState(false);
   const fetcher = useFetcher();
 
@@ -62,23 +62,23 @@ export function SettingsModal({ defaultAutoStopHours, desktopApiKey }: SettingsM
             </p>
             
             <div className="border-t pt-4">
-              <h4 className="text-sm font-medium mb-3">Desktop App Integration</h4>
+              <h4 className="text-sm font-medium mb-3">API Integration</h4>
               <div className="space-y-3">
                 <div className="grid gap-2">
-                  <Label htmlFor="apiKey">Desktop API Key</Label>
+                  <Label htmlFor="apiKey">Personal API Key</Label>
                   <div className="flex gap-2">
                     <Input 
                       id="apiKey" 
                       readOnly 
-                      value={desktopApiKey || "No key generated yet"} 
+                      value={apiKey || "No key generated yet"} 
                       className="font-mono text-xs bg-zinc-50 dark:bg-zinc-900"
                     />
-                    {desktopApiKey && (
+                    {apiKey && (
                       <Button 
                         type="button" 
                         variant="outline" 
                         onClick={() => {
-                          navigator.clipboard.writeText(desktopApiKey);
+                          navigator.clipboard.writeText(apiKey);
                           alert("API Key copied to clipboard!");
                         }}
                       >
@@ -103,7 +103,7 @@ export function SettingsModal({ defaultAutoStopHours, desktopApiKey }: SettingsM
                         Generating...
                       </>
                     ) : (
-                      desktopApiKey ? "Regenerate Key" : "Generate Key"
+                      apiKey ? "Regenerate Key" : "Generate Key"
                     )}
                   </Button>
                 </div>

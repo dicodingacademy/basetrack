@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import { useRevalidator } from "react-router";
 
-export function useTimerWebSocket(desktopApiKey?: string | null, wsUrl?: string) {
+export function useTimerWebSocket(apiKey?: string | null, wsUrl?: string) {
   const revalidator = useRevalidator();
   const revalidateRef = useRef(revalidator.revalidate);
   const wsRef = useRef<WebSocket | null>(null);
@@ -12,7 +12,7 @@ export function useTimerWebSocket(desktopApiKey?: string | null, wsUrl?: string)
   }, [revalidator.revalidate]);
 
   useEffect(() => {
-    if (!desktopApiKey) return;
+    if (!apiKey) return;
 
     let isComponentMounted = true;
 
@@ -21,7 +21,7 @@ export function useTimerWebSocket(desktopApiKey?: string | null, wsUrl?: string)
       wsRef.current = ws;
 
       ws.onopen = () => {
-        ws.send(JSON.stringify({ type: "AUTH", apiKey: desktopApiKey }));
+        ws.send(JSON.stringify({ type: "AUTH", apiKey: apiKey }));
       };
 
       ws.onmessage = (event) => {
@@ -51,5 +51,5 @@ export function useTimerWebSocket(desktopApiKey?: string | null, wsUrl?: string)
       if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
       if (wsRef.current) wsRef.current.close();
     };
-  }, [desktopApiKey, wsUrl]);
+  }, [apiKey, wsUrl]);
 }
