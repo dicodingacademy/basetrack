@@ -5,11 +5,12 @@ const CLIENT_ID = process.env.BASECAMP_CLIENT_ID;
 const CLIENT_SECRET = process.env.BASECAMP_CLIENT_SECRET;
 const REDIRECT_URI = process.env.BASECAMP_REDIRECT_URI;
 
-export function getAuthorizationUrl() {
+export function getAuthorizationUrl(state: string) {
   const url = new URL("https://launchpad.37signals.com/authorization/new");
   url.searchParams.set("type", "web_server");
   url.searchParams.set("client_id", CLIENT_ID!);
   url.searchParams.set("redirect_uri", REDIRECT_URI!);
+  url.searchParams.set("state", state);
   return url.toString();
 }
 

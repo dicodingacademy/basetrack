@@ -7,10 +7,20 @@ import { commitSession, getSession } from "../utils/session.server";
 export async function loader({ request }: Route.LoaderArgs) {
   const url = new URL(request.url);
   const code = url.searchParams.get("code");
+  const state = url.searchParams.get("state");
 
-  if (!code) {
-    return new Response("No code provided", { status: 400 });
+  if (!code || !state) {
+    return new Response("Missing code or state", { status: 400 });
   }
+
+  const cookieSession = await getSession(request.headers.get("Cookie"));
+  const savedState = cookieSession.get("oauth_state");
+
+  if (!savedState || savedState !== state) {
+    return new Response("Invalid state parameter (CSRF attempt detected)", { status: 400 });
+  }
+
+  cookieSession.unset("oauth_state");
 
   try {
     const tokenData = await exchangeCodeForTokens(code);
