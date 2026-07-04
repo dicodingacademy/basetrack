@@ -93,6 +93,13 @@ function App() {
             if (prev && prev !== "Network error or connection dropped") return prev;
             return `Closed with code ${event.code}`;
           });
+          
+          if (event.code === 1008) {
+            setIsEditingKey(true);
+            setApiKey("");
+            return;
+          }
+
           // Attempt to reconnect after 3 seconds
           reconnectTimeoutRef.current = setTimeout(connectWs, 3000);
         }
@@ -118,6 +125,7 @@ function App() {
 
   const handleSaveKey = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!apiKey.trim()) return;
     localStorage.setItem(API_KEY_STORAGE_KEY, apiKey);
     setIsEditingKey(false);
   };
@@ -207,7 +215,11 @@ function App() {
                 : 'bg-red-500'
           }`} />
           <span className="text-xs font-semibold truncate text-zinc-200 group-hover:text-white transition-colors">
-            {activeTimer ? activeTimer.todoTitle : "Ready"}
+            {activeTimer ? activeTimer.todoTitle : (
+              wsStatus === 'connected' ? "Ready" : 
+              wsStatus === 'connecting' ? "Connecting..." : 
+              (errorMessage || "Disconnected")
+            )}
           </span>
         </div>
 
