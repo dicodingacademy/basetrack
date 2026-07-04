@@ -20,6 +20,7 @@ services:
       - apps/tracker/.env
     environment:
       - DATABASE_URL=postgresql://basetrack:password@db:5432/basetrack?schema=public
+      - WS_INTERNAL_URL=http://ws:8081/internal/broadcast
     depends_on:
       - db
     networks:
@@ -27,6 +28,20 @@ services:
 
   cron:
     image: basetrack-cron:latest
+    env_file:
+      - apps/tracker/.env
+    environment:
+      - DATABASE_URL=postgresql://basetrack:password@db:5432/basetrack?schema=public
+      - WS_INTERNAL_URL=http://ws:8081/internal/broadcast
+    depends_on:
+      - db
+    networks:
+      - tunnel_network
+
+  ws:
+    image: basetrack-ws:latest
+    ports:
+      - "8081:8081"
     env_file:
       - apps/tracker/.env
     environment:
