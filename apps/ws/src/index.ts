@@ -11,9 +11,8 @@ app.use(express.json());
 const server = createServer(app);
 const wss = new WebSocketServer({ server });
 
-const activeClients = new Map<WebSocket, string>(); // ws -> userId
+const activeClients = new Map<WebSocket, string>();
 
-// Task 9.2: WebSocket Authentication
 wss.on("connection", (ws) => {
   let isAuthenticated = false;
 
@@ -44,7 +43,6 @@ wss.on("connection", (ws) => {
         ws.send(JSON.stringify({ type: "AUTH_SUCCESS", message: "Authenticated successfully" }));
         console.log(`WebSocket authenticated for user ${user.id}`);
 
-        // Fetch current active timer state to sync on launch
         const activeTimer = await prisma.activeTimer.findUnique({
           where: { userId: user.id }
         });
@@ -92,7 +90,6 @@ wss.on("connection", (ws) => {
     activeClients.delete(ws);
   });
 
-  // Timeout if not authenticated within 15 seconds
   setTimeout(() => {
     if (!isAuthenticated && ws.readyState === WebSocket.OPEN) {
       ws.close(1008, "Authentication timeout");
@@ -100,9 +97,7 @@ wss.on("connection", (ws) => {
   }, 15000);
 });
 
-// Internal endpoint to trigger broadcasts from tracker or cron
 app.post("/internal/broadcast", (req, res) => {
-  // Simple internal security
   const internalKey = req.headers["x-internal-key"];
   const expectedKey = process.env.INTERNAL_API_KEY || "dev-internal-key-123";
   
@@ -118,7 +113,6 @@ app.post("/internal/broadcast", (req, res) => {
     return;
   }
 
-  // Broadcast to this user's connections
   let sentCount = 0;
   for (const [ws, connectedUserId] of activeClients.entries()) {
     if (connectedUserId === userId && ws.readyState === WebSocket.OPEN) {
