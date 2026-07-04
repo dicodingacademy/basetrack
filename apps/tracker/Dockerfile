@@ -7,6 +7,7 @@ FROM base AS deps
 COPY package*.json ./
 COPY apps/tracker/package.json ./apps/tracker/
 COPY apps/cron/package.json ./apps/cron/
+COPY apps/ws/package.json ./apps/ws/
 COPY packages/db/package.json ./packages/db/
 RUN npm ci
 

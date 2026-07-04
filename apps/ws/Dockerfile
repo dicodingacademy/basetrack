@@ -23,9 +23,10 @@ RUN npm run db:generate --workspace=@basetrack/db
 FROM base AS runner
 COPY --from=build-env /app/package.json /app/package.json
 COPY --from=build-env /app/node_modules /app/node_modules
-COPY --from=build-env /app/apps/cron /app/apps/cron
+COPY --from=build-env /app/apps/ws /app/apps/ws
 COPY --from=build-env /app/packages/db /app/packages/db
 
 ENV NODE_ENV=production
+EXPOSE 8081
 
-CMD ["npm", "start", "-w", "@basetrack/cron"]
+CMD ["npm", "start", "-w", "@basetrack/ws"]
