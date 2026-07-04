@@ -50,9 +50,9 @@ wss.on("connection", (ws) => {
         });
         
         if (activeTimer) {
-          ws.send(JSON.stringify({ type: "TIMER_STARTED", timer: activeTimer }));
+          ws.send(JSON.stringify({ type: "TIMER_STARTED", timer: activeTimer, isInitialSync: true }));
         } else {
-          ws.send(JSON.stringify({ type: "TIMER_STOPPED" }));
+          ws.send(JSON.stringify({ type: "TIMER_STOPPED", isInitialSync: true }));
         }
       } else if (message.type === "STOP_TIMER") {
         if (!isAuthenticated) return;
