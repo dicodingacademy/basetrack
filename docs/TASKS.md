@@ -128,10 +128,10 @@ Berdasarkan `docs/PRD.md`, berikut adalah ekstraksi tugas (tasks) yang detail da
   - Sinkronkan *state* lokal (durasi timer, teks project/to-do) jika WebSocket menerima broadcast `TIMER_STARTED` atau `TIMER_STOPPED`.
 
 ## Phase 12: Desktop Timer Control (Write Operations)
-- [ ] **Task 12.1: UI Komponen Timer**
+- [x] **Task 12.1: UI Komponen Timer**
   - Buat tombol "Start" dan "Stop" berukuran proporsional untuk *widget* desktop.
   - Buat tampilan angka timer (`HH:MM:SS`) yang detiknya bertambah di sisi klien (optimistic UI).
-- [ ] **Task 12.2: Eksekusi Perintah ke Server**
+- [x] **Task 12.2: Eksekusi Perintah ke Server**
   - Saat tombol "Start"/"Stop" ditekan di desktop, kirim request ke API server web (dengan header Authorization berisi API Key) untuk memodifikasi database.
   - Server yang memodifikasi database kemudian otomatis menjalankan *Task 9.3* (Broadcasting), sehingga Desktop dan Web tetap konsisten.
 
