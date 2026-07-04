@@ -45,15 +45,17 @@ export async function startTimer(
 
 export async function stopTimer(userId: string, basecampId: string) {
   const activeTimer = await prisma.activeTimer.findUnique({ where: { userId } });
-  if (!activeTimer) return { success: true }; // already stopped
+  if (!activeTimer) return { success: true };
 
   const stoppedAt = new Date();
   const durationSec = Math.floor((stoppedAt.getTime() - activeTimer.startedAt.getTime()) / 1000);
   const durationHours = durationSec / 3600;
 
+  await prisma.activeTimer.delete({ where: { userId } });
+  await notifyWebSocketServer(userId, { type: "TIMER_STOPPED" });
+
   let syncStatus: "PENDING" | "SYNCED" | "FAILED";
 
-  // Sync directly to basecamp if time is meaningful (> 1 minute)
   if (durationSec >= 60) {
     try {
       const accessToken = await getValidAccessToken(userId);
@@ -72,7 +74,7 @@ export async function stopTimer(userId: string, basecampId: string) {
       syncStatus = "FAILED";
     }
   } else {
-    syncStatus = "FAILED"; // Too short to sync
+    syncStatus = "FAILED";
   }
 
   await prisma.timeEntry.create({
@@ -90,10 +92,6 @@ export async function stopTimer(userId: string, basecampId: string) {
     },
   });
 
-  await prisma.activeTimer.delete({ where: { userId } });
-  
-  await notifyWebSocketServer(userId, { type: "TIMER_STOPPED" });
-  
   return { success: true };
 }
 
