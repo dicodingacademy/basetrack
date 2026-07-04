@@ -29,7 +29,7 @@ wss.on("connection", (ws) => {
         }
 
         const user = await prisma.user.findUnique({
-          where: { desktopApiKey: apiKey }
+          where: { apiKey: apiKey }
         });
 
         if (!user) {
@@ -55,7 +55,7 @@ wss.on("connection", (ws) => {
       } else if (message.type === "STOP_TIMER") {
         if (!isAuthenticated) return;
         const user = await prisma.user.findUnique({
-          where: { desktopApiKey: message.apiKey }
+          where: { apiKey: message.apiKey }
         });
         if (!user) return;
 
