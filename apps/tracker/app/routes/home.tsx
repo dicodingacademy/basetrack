@@ -83,6 +83,8 @@ export async function loader({ request }: Route.LoaderArgs) {
       const bucketId = curr.bucket.id;
       if (!timesheetEnabledProjectIds.has(bucketId)) return acc;
 
+      if (curr.completed === true || curr.status === 'archived' || curr.status === 'trashed') return acc;
+
       if (!acc[bucketId]) {
         acc[bucketId] = {
           projectId: curr.bucket.id.toString(),

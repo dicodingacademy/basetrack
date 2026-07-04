@@ -17,6 +17,8 @@ export type BasecampAssignment = {
   bucket?: BasecampBucket;
   due_on?: string | null;
   assignees?: BasecampAssignee[];
+  completed?: boolean;
+  status?: string;
 };
 
 export type BasecampProject = {
