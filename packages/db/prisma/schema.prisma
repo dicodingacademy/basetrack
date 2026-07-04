@@ -27,7 +27,7 @@ model User {
   timeEntries            TimeEntry[]
   activeTimer            ActiveTimer?
   autoStopThresholdHours Int          @default(8)
-  desktopApiKey          String?      @unique
+  apiKey                 String?      @unique
 }
 
 model Session {
