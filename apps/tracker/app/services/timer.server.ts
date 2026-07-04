@@ -1,6 +1,24 @@
 import { prisma } from "../utils/db.server";
 import { getValidAccessToken, createTimesheetEntry } from "../utils/basecamp.server";
 
+export async function notifyWebSocketServer(userId: string, event: any) {
+  try {
+    const wsUrl = process.env.WS_INTERNAL_URL || "http://localhost:8081/internal/broadcast";
+    const internalKey = process.env.INTERNAL_API_KEY || "dev-internal-key-123";
+    
+    fetch(wsUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-internal-key": internalKey,
+      },
+      body: JSON.stringify({ userId, event }),
+    }).catch((e) => console.error("Failed to notify WS server (async):", e.message));
+  } catch (e: any) {
+    console.error("Failed to notify WS server:", e.message);
+  }
+}
+
 export async function getActiveTimer(userId: string) {
   return await prisma.activeTimer.findUnique({
     where: { userId },
@@ -13,12 +31,14 @@ export async function startTimer(
 ) {
   await prisma.activeTimer.deleteMany({ where: { userId } });
 
-  await prisma.activeTimer.create({
+  const newTimer = await prisma.activeTimer.create({
     data: {
       userId,
       ...data,
     },
   });
+
+  await notifyWebSocketServer(userId, { type: "TIMER_STARTED", timer: newTimer });
 
   return { success: true };
 }
@@ -71,6 +91,9 @@ export async function stopTimer(userId: string, basecampId: string) {
   });
 
   await prisma.activeTimer.delete({ where: { userId } });
+  
+  await notifyWebSocketServer(userId, { type: "TIMER_STOPPED" });
+  
   return { success: true };
 }
 

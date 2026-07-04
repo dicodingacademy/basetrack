@@ -3,6 +3,24 @@ import { PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();
 
+async function notifyWebSocketServer(userId, event) {
+  try {
+    const wsUrl = process.env.WS_INTERNAL_URL || "http://localhost:8081/internal/broadcast";
+    const internalKey = process.env.INTERNAL_API_KEY || "dev-internal-key-123";
+    
+    await fetch(wsUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-internal-key": internalKey,
+      },
+      body: JSON.stringify({ userId, event }),
+    });
+  } catch (e) {
+    console.error("Failed to notify WS server:", e.message);
+  }
+}
+
 console.log("Cron service starting...");
 
 // Run every minute
@@ -44,6 +62,8 @@ cron.schedule("* * * * *", async () => {
             where: { id: timer.id },
           }),
         ]);
+        
+        await notifyWebSocketServer(timer.userId, { type: "TIMER_AUTO_STOPPED" });
       }
     }
   } catch (error) {
