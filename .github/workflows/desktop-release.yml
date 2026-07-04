@@ -3,7 +3,7 @@ name: "Release Desktop App"
 on:
   push:
     tags:
-      - "desktop-v*"
+      - "v*"
   workflow_dispatch:
     inputs:
       version_bump:
@@ -52,10 +52,10 @@ jobs:
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git add apps/desktop/package.json apps/desktop/src-tauri/tauri.conf.json
           git commit -m "chore(desktop): bump version to $NEW_VERSION"
-          git tag "desktop-v$NEW_VERSION"
+          git tag "v$NEW_VERSION"
           git push origin HEAD --tags
           echo "new_sha=$(git rev-parse HEAD)" >> $GITHUB_OUTPUT
-          echo "tag_name=desktop-v$NEW_VERSION" >> $GITHUB_OUTPUT
+          echo "tag_name=v$NEW_VERSION" >> $GITHUB_OUTPUT
           echo "version=$NEW_VERSION" >> $GITHUB_OUTPUT
 
       - name: Set Variables
@@ -66,7 +66,7 @@ jobs:
             echo "version=${{ steps.bump.outputs.version }}" >> $GITHUB_OUTPUT
           else
             echo "tag_name=${{ github.ref_name }}" >> $GITHUB_OUTPUT
-            VERSION=$(echo "${{ github.ref_name }}" | sed 's/desktop-v//')
+            VERSION=$(echo "${{ github.ref_name }}" | sed 's/^v//')
             echo "version=$VERSION" >> $GITHUB_OUTPUT
           fi
           echo "should_release=true" >> $GITHUB_OUTPUT
@@ -76,11 +76,10 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.vars.outputs.tag_name }}
-          name: "Basetrack Desktop Companion v${{ steps.vars.outputs.version }}"
+          name: "v${{ steps.vars.outputs.version }}"
           body: |
-            ## Basetrack Desktop v${{ steps.vars.outputs.version }}
+            ## v${{ steps.vars.outputs.version }}
             
-            This is the latest release for Basetrack Desktop Companion.
             Please download the appropriate installer for your operating system from the assets below.
             
             ### Supported Platforms
