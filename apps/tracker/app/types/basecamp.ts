@@ -3,12 +3,20 @@ export type BasecampBucket = {
   name: string;
 };
 
+export type BasecampAssignee = {
+  id: number;
+  name: string;
+  avatar_url: string;
+};
+
 export type BasecampAssignment = {
   id: number;
   title?: string;
   content?: string;
   type: string;
   bucket?: BasecampBucket;
+  due_on?: string | null;
+  assignees?: BasecampAssignee[];
 };
 
 export type BasecampProject = {
@@ -20,6 +28,8 @@ export type GroupedTask = {
   id: string;
   title: string;
   type: string;
+  dueOn?: string | null;
+  assignees?: { id: number; name: string; avatarUrl: string }[];
 };
 
 export type GroupedAssignment = {

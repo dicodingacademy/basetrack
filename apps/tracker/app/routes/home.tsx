@@ -94,6 +94,12 @@ export async function loader({ request }: Route.LoaderArgs) {
         id: curr.id.toString(),
         title: curr.title || curr.content || "Untitled Task",
         type: curr.type,
+        dueOn: curr.due_on || null,
+        assignees: curr.assignees?.map(a => ({
+          id: a.id,
+          name: a.name,
+          avatarUrl: a.avatar_url,
+        })) || [],
       });
       return acc;
     }, {});
