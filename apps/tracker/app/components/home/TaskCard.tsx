@@ -16,22 +16,32 @@ type TaskProps = {
 export function TaskCard({ task, selectedProject, activeTimer }: TaskProps) {
   const isActive = activeTimer?.todoId === task.id;
 
-  return (
-    <div className="p-4 rounded-xl border flex gap-4 items-center justify-between hover:bg-muted/50 transition-colors group">
-      <div className="min-w-0 flex-1 pl-2 border-l-2 border-transparent group-hover:border-primary transition-colors">
-        <p className={`text-sm font-semibold truncate ${isActive ? "text-primary" : ""}`} title={task.title}>
-          {task.title}
-        </p>
-        <div className="flex items-center gap-3 mt-2">
-          <Badge variant="secondary">{task.type}</Badge>
-          
-          {task.dueOn && (
-            <div className="flex items-center text-xs text-muted-foreground gap-1" title="Deadline">
-              <Calendar className="w-3.5 h-3.5" />
-              <span>{new Date(task.dueOn).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</span>
-            </div>
-          )}
+  const bracketRegex = /\[([^\]]+)\]/g;
+  const extractedBadges: { text: string; variant: "default" | "secondary" | "destructive" | "outline" }[] = [];
+  let match;
+  
+  while ((match = bracketRegex.exec(task.title)) !== null) {
+    const text = match[1].trim();
+    if (text.toUpperCase() === "P1") {
+      extractedBadges.push({ text: "HIGH", variant: "destructive" });
+    } else if (text.toUpperCase() === "P2") {
+      extractedBadges.push({ text: "MEDIUM", variant: "default" });
+    } else if (text.toUpperCase() === "P3") {
+      extractedBadges.push({ text: "LOW", variant: "secondary" });
+    } else {
+      extractedBadges.push({ text, variant: "outline" });
+    }
+  }
+  
+  const cleanTitle = task.title.replace(bracketRegex, "").trim();
 
+  return (
+    <div className={`group p-4 rounded-xl border flex gap-4 items-center justify-between transition-all hover:shadow-md ${isActive ? "border-primary/50 shadow-primary/10 ring-1 ring-primary/20 bg-primary/[0.02]" : "border-border/60"}`}>
+      <div className="min-w-0 flex-1 pl-2 border-l-2 border-transparent group-hover:border-primary transition-colors">
+        <p className={`text-sm font-semibold truncate ${isActive ? "text-primary" : ""}`} title={cleanTitle}>
+          {cleanTitle}
+        </p>
+        <div className="flex flex-wrap items-center gap-2 mt-2">
           {task.assignees && task.assignees.length > 0 && (
             <AvatarGroup className="-space-x-1.5" title={task.assignees.map(a => a.name).join(", ")}>
               {task.assignees.slice(0, 3).map((assignee) => (
@@ -46,6 +56,17 @@ export function TaskCard({ task, selectedProject, activeTimer }: TaskProps) {
                 </div>
               )}
             </AvatarGroup>
+          )}
+
+          {extractedBadges.map((badge, idx) => (
+            <Badge key={idx} variant={badge.variant}>{badge.text}</Badge>
+          ))}
+          
+          {task.dueOn && (
+            <div className="flex items-center text-xs text-muted-foreground gap-1" title="Deadline">
+              <Calendar className="w-3.5 h-3.5" />
+              <span>{new Date(task.dueOn).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</span>
+            </div>
           )}
 
           {isActive && (
