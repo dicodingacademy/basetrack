@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigation } from "react-router";
+import { useNavigation, Form } from "react-router";
 
 import type { Route } from "./+types/home";
 import { getSession, getUserFromSessionId } from "../utils/session.server";
@@ -32,7 +32,7 @@ import { TaskCard } from "../components/home/TaskCard";
 import { ActiveTimerCard } from "../components/home/ActiveTimerCard";
 import { PendingApprovals } from "../components/home/PendingApprovals";
 import { SettingsModal } from "../components/home/SettingsModal";
-import { Clock, Briefcase, LayoutDashboard, CheckCircle2, ArrowRight } from "lucide-react";
+import { Clock, Briefcase, LayoutDashboard, CheckCircle2, ArrowRight, LogOut } from "lucide-react";
 import type { BasecampAssignment, BasecampProject, GroupedAssignment, GroupedTask } from "../types/basecamp";
 
 export function meta(_args: Route.MetaArgs) {
@@ -300,11 +300,16 @@ export default function Home({ loaderData }: Route.ComponentProps) {
                   <span className="truncate font-semibold">{user.name}</span>
                   <span className="truncate text-xs text-zinc-500 dark:text-zinc-400">{user.email}</span>
                 </div>
-                <div onClick={(e) => e.stopPropagation()}>
+                <div onClick={(e) => e.stopPropagation()} className="flex items-center gap-1">
                   <SettingsModal 
                     defaultAutoStopHours={user.autoStopThresholdHours ?? 8} 
                     apiKey={user.apiKey}
                   />
+                  <Form method="post" action="/auth/logout">
+                    <Button type="submit" variant="ghost" size="icon" className="h-8 w-8 text-zinc-500 hover:text-red-500" title="Logout">
+                      <LogOut className="h-4 w-4" />
+                    </Button>
+                  </Form>
                 </div>
               </SidebarMenuButton>
             </SidebarMenuItem>
