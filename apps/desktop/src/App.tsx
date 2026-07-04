@@ -14,7 +14,6 @@ function App() {
   const [wsStatus, setWsStatus] = useState<"connecting" | "connected" | "disconnected" | "error">("disconnected");
   const [errorMessage, setErrorMessage] = useState("");
   const [activeTimer, setActiveTimer] = useState<any>(null);
-  const [elapsed, setElapsed] = useState(0);
 
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -91,7 +90,7 @@ function App() {
         }
       };
 
-      ws.onerror = (e) => {
+      ws.onerror = () => {
         setWsStatus("error");
         setErrorMessage((prev) => prev || "Network error or connection dropped");
       };
@@ -108,21 +107,6 @@ function App() {
   }, [apiKey, isEditingKey]);
 
   // Timer Tick
-  useEffect(() => {
-    if (!activeTimer) return;
-    const interval = setInterval(() => {
-      const start = new Date(activeTimer.startedAt).getTime();
-      const now = Date.now();
-      setElapsed(Math.floor((now - start) / 1000));
-    }, 1000);
-    
-    // Initial run
-    const start = new Date(activeTimer.startedAt).getTime();
-    const now = Date.now();
-    setElapsed(Math.floor((now - start) / 1000));
-
-    return () => clearInterval(interval);
-  }, [activeTimer]);
 
   const handleSaveKey = (e: React.FormEvent) => {
     e.preventDefault();
