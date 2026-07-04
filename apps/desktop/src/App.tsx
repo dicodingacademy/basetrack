@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { GripVertical, Play, Square, X } from "lucide-react";
+import { GripVertical, Play, Square, X, KeyRound } from "lucide-react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { LogicalSize, PhysicalPosition } from "@tauri-apps/api/dpi";
 import "./App.css";
@@ -14,6 +14,14 @@ function App() {
   const [wsStatus, setWsStatus] = useState<"connecting" | "connected" | "disconnected" | "error">("disconnected");
   const [errorMessage, setErrorMessage] = useState("");
   const [activeTimer, setActiveTimer] = useState<any>(null);
+  const [now, setNow] = useState(Date.now());
+
+  useEffect(() => {
+    if (!activeTimer) return;
+    setNow(Date.now());
+    const interval = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(interval);
+  }, [activeTimer]);
 
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -117,7 +125,6 @@ function App() {
   const formatTime = () => {
     if (!activeTimer) return "00:00:00";
     const start = new Date(activeTimer.startedAt).getTime();
-    const now = Date.now();
     const totalSeconds = Math.floor((now - start) / 1000);
     const h = Math.floor(totalSeconds / 3600);
     const m = Math.floor((totalSeconds % 3600) / 60);
@@ -137,24 +144,22 @@ function App() {
 
   if (isEditingKey) {
     return (
-      <main className="h-10 w-screen flex flex-col bg-[#1C1C1E] text-white overflow-hidden border border-[#3C3C3E] select-none rounded-lg">
-        <div 
-          data-tauri-drag-region
-          className="h-full w-full flex items-center justify-between px-2 cursor-move"
-        >
-          <form onSubmit={handleSaveKey} className="w-full flex items-center gap-2 pointer-events-none">
+      <main className="h-10 w-screen flex flex-col bg-[#1C1C1E] text-white overflow-hidden border border-[#3C3C3E] select-none rounded-lg relative">
+        <div data-tauri-drag-region className="absolute inset-0 cursor-move z-0" />
+        <div className="h-full w-full flex items-center justify-between px-2 z-10">
+          <form onSubmit={handleSaveKey} className="w-full flex items-center gap-2">
             <input
               type="text"
               value={apiKey}
               onChange={(e) => setApiKey(e.target.value)}
-              placeholder="API Key (Double click status to edit later)"
-              className="flex-1 bg-[#2C2C2E] border border-[#3C3C3E] rounded px-2 py-1 text-[11px] outline-none focus:border-blue-500 transition-colors cursor-text pointer-events-auto"
+              placeholder="API Key"
+              className="flex-1 bg-[#2C2C2E] border border-[#3C3C3E] rounded px-2 py-1 text-[11px] outline-none focus:border-blue-500 transition-colors cursor-text"
               autoFocus
             />
-            <button type="submit" className="bg-blue-600 hover:bg-blue-700 px-2.5 py-1 rounded text-[11px] font-medium cursor-pointer pointer-events-auto">
+            <button type="submit" className="bg-blue-600 hover:bg-blue-700 px-2.5 py-1 rounded text-[11px] font-medium cursor-pointer">
               Save
             </button>
-            <button type="button" onClick={closeWindow} className="p-1 hover:bg-white/10 rounded text-zinc-400 hover:text-white cursor-pointer pointer-events-auto">
+            <button type="button" onClick={closeWindow} className="p-1 hover:bg-white/10 rounded text-zinc-400 hover:text-white cursor-pointer" title="Close">
               <X className="w-3.5 h-3.5 pointer-events-none" />
             </button>
           </form>
@@ -211,9 +216,19 @@ function App() {
           {formatTime()}
         </div>
 
+        {/* API Key Button */}
+        <button 
+          type="button" 
+          onClick={() => setIsEditingKey(true)} 
+          className="flex-shrink-0 p-1 hover:bg-white/10 rounded transition-colors cursor-pointer text-zinc-400 hover:text-white" 
+          title="Change API Key"
+        >
+          <KeyRound className="w-3.5 h-3.5 pointer-events-none" />
+        </button>
+
         {/* Close Button */}
-        <button onClick={closeWindow} className="flex-shrink-0 p-1 hover:bg-white/10 rounded transition-colors cursor-pointer ml-0.5 text-zinc-400 hover:text-red-400" title="Close">
-          <X className="w-3.5 h-3.5" />
+        <button type="button" onClick={closeWindow} className="flex-shrink-0 p-1 hover:bg-white/10 rounded transition-colors cursor-pointer ml-0.5 text-zinc-400 hover:text-red-400" title="Close">
+          <X className="w-3.5 h-3.5 pointer-events-none" />
         </button>
       </div>
     </main>
