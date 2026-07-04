@@ -5,6 +5,7 @@ import type { Route } from "./+types/home";
 import { getSession, getUserFromSessionId } from "../utils/session.server";
 import { fetchAssignments, fetchProjectDetails, getValidAccessToken } from "../utils/basecamp.server";
 import { startTimer, stopTimer, getActiveTimer, getPendingApprovals, approveTimeEntry } from "../services/timer.server";
+import { updateUserSettings, generateNewApiKey } from "../services/user.server";
 import { Button } from "../components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "../components/ui/card";
 
@@ -175,22 +176,12 @@ export async function action({ request }: Route.ActionArgs) {
       return new Response("Invalid value", { status: 400 });
     }
     
-    // Using prisma from db.server
-    const { prisma } = await import("../utils/db.server");
-    await prisma.user.update({
-      where: { id: user.id },
-      data: { autoStopThresholdHours }
-    });
+    await updateUserSettings(user.id, autoStopThresholdHours);
     return { success: true };
   }
 
   if (intent === "GENERATE_API_KEY") {
-    const { prisma } = await import("../utils/db.server");
-    const newApiKey = crypto.randomUUID();
-    await prisma.user.update({
-      where: { id: user.id },
-      data: { apiKey: newApiKey }
-    });
+    await generateNewApiKey(user.id);
     return { success: true };
   }
 
