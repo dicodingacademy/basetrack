@@ -19,9 +19,12 @@ on:
 jobs:
   prepare:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     outputs:
-      should_release: ${{ steps.check.outputs.should_release }}
+      should_release: ${{ steps.vars.outputs.should_release }}
       new_sha: ${{ steps.bump.outputs.new_sha }}
+      release_id: ${{ steps.create_release.outputs.id }}
     steps:
       - uses: actions/checkout@v5
         with:
@@ -52,11 +55,40 @@ jobs:
           git tag "desktop-v$NEW_VERSION"
           git push origin HEAD --tags
           echo "new_sha=$(git rev-parse HEAD)" >> $GITHUB_OUTPUT
+          echo "tag_name=desktop-v$NEW_VERSION" >> $GITHUB_OUTPUT
+          echo "version=$NEW_VERSION" >> $GITHUB_OUTPUT
 
-      - name: Check Status
-        id: check
+      - name: Set Variables
+        id: vars
         run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            echo "tag_name=${{ steps.bump.outputs.tag_name }}" >> $GITHUB_OUTPUT
+            echo "version=${{ steps.bump.outputs.version }}" >> $GITHUB_OUTPUT
+          else
+            echo "tag_name=${{ github.ref_name }}" >> $GITHUB_OUTPUT
+            VERSION=$(echo "${{ github.ref_name }}" | sed 's/desktop-v//')
+            echo "version=$VERSION" >> $GITHUB_OUTPUT
+          fi
           echo "should_release=true" >> $GITHUB_OUTPUT
+
+      - name: Create Release
+        id: create_release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.vars.outputs.tag_name }}
+          name: "Basetrack Desktop Companion v${{ steps.vars.outputs.version }}"
+          body: |
+            ## Basetrack Desktop v${{ steps.vars.outputs.version }}
+            
+            This is the latest release for Basetrack Desktop Companion.
+            Please download the appropriate installer for your operating system from the assets below.
+            
+            ### Supported Platforms
+            - **Windows**: `.msi`, `.exe`
+            - **macOS**: `.dmg`, `.app.tar.gz` (Intel & Apple Silicon)
+            - **Linux**: `.deb`, `.rpm`, `.AppImage`
+          draft: true
+          prerelease: false
 
   release:
     needs: prepare
@@ -111,16 +143,12 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
 
-      - name: Build Tauri App and Create Release
+      - name: Build Tauri App and Upload Assets
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           projectPath: "./apps/desktop"
-          tagName: desktop-v__VERSION__
-          releaseName: "Basetrack Desktop v__VERSION__"
-          releaseBody: "See the assets to download this version and install."
-          releaseDraft: true
-          prerelease: false
+          releaseId: ${{ needs.prepare.outputs.release_id }}
           includeUpdaterJson: false
           args: ${{ matrix.args }}
