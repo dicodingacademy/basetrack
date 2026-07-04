@@ -3,10 +3,23 @@ import { WebSocketServer, WebSocket } from "ws";
 import express from "express";
 import { PrismaClient } from "@prisma/client";
 import { createServer } from "node:http";
+import { timingSafeEqual } from "node:crypto";
 
 const prisma = new PrismaClient();
 const app = express();
 app.use(express.json());
+
+const expectedInternalKey = process.env.INTERNAL_API_KEY;
+if (process.env.NODE_ENV === "production" && !expectedInternalKey) {
+  throw new Error("INTERNAL_API_KEY must be set in production environment");
+}
+const INTERNAL_KEY = expectedInternalKey || "dev-internal-key-123";
+
+function isAuthorized(providedKey?: string | string[]): boolean {
+  if (typeof providedKey !== "string") return false;
+  if (providedKey.length !== INTERNAL_KEY.length) return false;
+  return timingSafeEqual(Buffer.from(providedKey), Buffer.from(INTERNAL_KEY));
+}
 
 const server = createServer(app);
 const wss = new WebSocketServer({ server });
@@ -22,8 +35,8 @@ wss.on("connection", (ws) => {
       
       if (message.type === "AUTH") {
         const apiKey = message.apiKey;
-        if (!apiKey) {
-          ws.send(JSON.stringify({ type: "ERROR", message: "API Key required" }));
+        if (!apiKey || typeof apiKey !== "string") {
+          ws.send(JSON.stringify({ type: "ERROR", message: "API Key required and must be a string" }));
           setTimeout(() => ws.close(1008, "API Key required"), 50);
           return;
         }
@@ -54,10 +67,18 @@ wss.on("connection", (ws) => {
         }
       } else if (message.type === "STOP_TIMER") {
         if (!isAuthenticated) return;
+        
+        const connectedUserId = activeClients.get(ws);
+        if (!connectedUserId) return;
+
         const user = await prisma.user.findUnique({
-          where: { apiKey: message.apiKey }
+          where: { id: connectedUserId }
         });
-        if (!user) return;
+        
+        if (!user || user.apiKey !== message.apiKey) {
+          console.warn(`Unauthorized STOP_TIMER attempt on ws for user ${connectedUserId}`);
+          return;
+        }
 
         const activeTimer = await prisma.activeTimer.findUnique({
           where: { userId: user.id }
@@ -99,9 +120,8 @@ wss.on("connection", (ws) => {
 
 app.post("/internal/broadcast", (req, res) => {
   const internalKey = req.headers["x-internal-key"];
-  const expectedKey = process.env.INTERNAL_API_KEY || "dev-internal-key-123";
   
-  if (internalKey !== expectedKey) {
+  if (!isAuthorized(internalKey)) {
     res.status(401).json({ error: "Unauthorized" });
     return;
   }
@@ -122,6 +142,32 @@ app.post("/internal/broadcast", (req, res) => {
   }
 
   res.json({ success: true, sentCount });
+});
+
+app.post("/internal/kick", (req, res) => {
+  const internalKey = req.headers["x-internal-key"];
+  
+  if (!isAuthorized(internalKey)) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+
+  const { userId } = req.body;
+  if (!userId) {
+    res.status(400).json({ error: "Missing userId" });
+    return;
+  }
+
+  let kickedCount = 0;
+  for (const [ws, connectedUserId] of activeClients.entries()) {
+    if (connectedUserId === userId) {
+      ws.close(1008, "Session invalidated by server");
+      activeClients.delete(ws);
+      kickedCount++;
+    }
+  }
+
+  res.json({ success: true, kickedCount });
 });
 
 const PORT = process.env.PORT || 8081;
