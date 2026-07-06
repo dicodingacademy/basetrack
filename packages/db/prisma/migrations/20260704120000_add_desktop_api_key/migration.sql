@@ -1,11 +1,5 @@
-/*
-  Warnings:
-
-  - A unique constraint covering the columns `[desktopApiKey]` on the table `User` will be added. If there are existing duplicate values, this will fail.
-
-*/
 -- AlterTable
-ALTER TABLE "User" ADD COLUMN     "desktopApiKey" TEXT;
+ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "desktopApiKey" TEXT;
 
 -- CreateIndex
-CREATE UNIQUE INDEX "User_desktopApiKey_key" ON "User"("desktopApiKey");
+CREATE UNIQUE INDEX IF NOT EXISTS "User_desktopApiKey_key" ON "User"("desktopApiKey");
