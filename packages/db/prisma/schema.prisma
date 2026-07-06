@@ -51,6 +51,7 @@ model ActiveTimer {
   projectName String
   startedAt   DateTime @default(now())
   lastPingAt  DateTime @default(now())
+  source      String    @default("BASECAMP")
 }
 
 model TimeEntry {
@@ -67,6 +68,7 @@ model TimeEntry {
   stopReason      StopReason
   syncStatus      SyncStatus
   basecampEntryId String?
+  source          String     @default("BASECAMP")
   createdAt       DateTime   @default(now())
 }
 
@@ -74,6 +76,12 @@ enum StopReason {
   MANUAL
   WEBSOCKET_TIMEOUT
   AUTO_STOPPED
+}
+
+enum TimerSource {
+  BASECAMP
+  GOOGLE_CALENDAR
+  GOOGLE_TASKS
 }
 
 enum SyncStatus {
