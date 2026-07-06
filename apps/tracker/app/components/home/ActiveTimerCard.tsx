@@ -1,7 +1,8 @@
 import { Form } from "react-router";
-import { Clock, Square } from "lucide-react";
+import { Clock, Square, Calendar, CheckSquare } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/card";
 import { Button } from "../../components/ui/button";
+import { Badge } from "../../components/ui/badge";
 import { LiveTimer } from "./LiveTimer";
 
 import type { ActiveTimerType } from "../../types/basecamp";
@@ -10,7 +11,14 @@ type ActiveTimerProps = {
   activeTimer: ActiveTimerType | null;
 };
 
+const sourceConfig: Record<string, { icon: typeof Clock; label: string; color: string }> = {
+  GOOGLE_CALENDAR: { icon: Calendar, label: "Calendar", color: "text-blue-500" },
+  GOOGLE_TASKS: { icon: CheckSquare, label: "Task", color: "text-green-500" },
+};
+
 export function ActiveTimerCard({ activeTimer }: ActiveTimerProps) {
+  const sourceInfo = activeTimer ? sourceConfig[activeTimer.source] : null;
+
   return (
     <Card>
       <CardHeader>
@@ -23,9 +31,17 @@ export function ActiveTimerCard({ activeTimer }: ActiveTimerProps) {
         {activeTimer ? (
           <div className="space-y-4">
             <div>
-              <p className="text-xs text-muted-foreground font-semibold uppercase tracking-wider mb-1 truncate">
-                {activeTimer.projectName}
-              </p>
+              <div className="flex items-center gap-2 mb-1">
+                <p className="text-xs text-muted-foreground font-semibold uppercase tracking-wider truncate">
+                  {activeTimer.projectName}
+                </p>
+                {sourceInfo && (
+                  <Badge variant="secondary" className="text-[10px] px-1.5 py-0 gap-1">
+                    <sourceInfo.icon className={`w-3 h-3 ${sourceInfo.color}`} />
+                    {sourceInfo.label}
+                  </Badge>
+                )}
+              </div>
               <p className="text-sm font-medium leading-tight">
                 {activeTimer.todoTitle}
               </p>

@@ -39,13 +39,13 @@ export function TaskCard({ task, selectedProject, activeTimer }: TaskProps) {
   const cleanTitle = task.title.replace(bracketRegex, "").trim();
 
   return (
-    <div className={`group p-4 rounded-xl border flex gap-4 items-center justify-between transition-all hover:shadow-md ${isActive ? "border-primary/50 shadow-primary/10 ring-1 ring-primary/20 bg-primary/[0.02]" : "border-border/60"}`}>
-      <div className="min-w-0 flex-1 pl-2 border-l-2 border-transparent group-hover:border-primary transition-colors">
-        <div className="flex items-center gap-2">
+    <div className={`group p-4 rounded-xl border flex gap-4 items-center justify-between transition-all hover:shadow-md overflow-hidden ${isActive ? "border-primary/50 shadow-primary/10 ring-1 ring-primary/20 bg-primary/[0.02]" : "border-border/60"}`}>
+      <div className="min-w-0 flex-1 pl-2">
+        <div className="flex items-center gap-2 overflow-hidden">
           {priorityBadges.map((badge, idx) => (
-            <Badge key={idx} variant={badge.variant}>{badge.text}</Badge>
+            <Badge key={idx} variant={badge.variant} className="shrink-0">{badge.text}</Badge>
           ))}
-          <p className={`text-sm font-semibold truncate ${isActive ? "text-primary" : ""}`} title={cleanTitle}>
+          <p className={`min-w-0 text-sm font-semibold truncate ${isActive ? "text-primary" : ""}`} title={cleanTitle}>
             {cleanTitle}
           </p>
         </div>
