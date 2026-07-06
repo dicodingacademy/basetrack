@@ -187,59 +187,52 @@ Berdasarkan `docs/PRD.md`, berikut adalah ekstraksi tugas (tasks) yang detail da
 
 ## Phase 15: Database Schema Update (Source Tracking)
 
-- [ ] **Task 15.1: Tambah Enum TimerSource**
-  - Buat enum `TimerSource` di `schema.prisma`: `BASECAMP`, `GOOGLE_CALENDAR`, `GOOGLE_TASKS`.
+- [x] **Task 15.1: Tambah Enum TimerSource**
+  - Enum `TimerSource` di `schema.prisma`: `BASECAMP`, `GOOGLE_CALENDAR`, `GOOGLE_TASKS`.
 
-- [ ] **Task 15.2: Tambah Kolom `source` ke ActiveTimer & TimeEntry**
-  - `ActiveTimer`: tambah field `source TimerSource @default(BASECAMP)`.
-  - `TimeEntry`: tambah field `source TimerSource @default(BASECAMP)`.
-  - Jalankan `prisma migrate dev`.
+- [x] **Task 15.2: Tambah Kolom `source` ke ActiveTimer & TimeEntry**
+  - `ActiveTimer`: tambah field `source String @default("BASECAMP")`.
+  - `TimeEntry`: tambah field `source String @default("BASECAMP")`.
 
 ## Phase 16: Update Timer Service (Multi-Source)
 
-- [ ] **Task 16.1: Update `startTimer` Function**
-  - Modifikasi signature: terima parameter `source` (`TimerSource`, default `BASECAMP`).
-  - Simpan `source` ke record `ActiveTimer` di database.
+- [x] **Task 16.1: Update `startTimer` Function**
+  - Parameter `source` opsional (default `BASECAMP`), disimpan ke `ActiveTimer.source`.
 
-- [ ] **Task 16.2: Update `stopTimer` Function**
-  - Saat membuat `TimeEntry`, copy field `source` dari `ActiveTimer` yang dihapus.
-  - Tidak ada perubahan logika sync ke Basecamp Timesheet (projectId sudah sesuai dari yang dipilih user).
+- [x] **Task 16.2: Update `stopTimer` Function**
+  - Copy `source` dari `ActiveTimer` ke `TimeEntry`.
+  - Cron auto-stop juga copy `source`.
 
 ## Phase 17: UI - Source Tabs & Google Items
 
-- [ ] **Task 17.1: Create ProjectPickerModal Component**
-  - Buat `apps/tracker/app/components/home/ProjectPickerModal.tsx`.
-  - Dialog yang menampilkan daftar Basecamp project (hanya yang `timesheet_enabled`).
-  - Props: `projects: { id: string; name: string }[]`, `onSelect: (project) => void`, `children: ReactNode` (trigger).
-  - User klik salah satu project → emit callback → submit form dengan intent `START_GOOGLE_TIMER`.
+- [x] **Task 17.1: Create ProjectPickerModal Component**
+  - `apps/tracker/app/components/home/ProjectPickerModal.tsx`.
+  - Dialog daftar project timesheet-enabled. OnClick project → callback + tutup modal.
 
-- [ ] **Task 17.2: Create GoogleItemCard Component**
-  - Buat `apps/tracker/app/components/home/GoogleItemCard.tsx`.
-  - Menampilkan item dari Google Calendar/Tasks (title, waktu/date, source icon).
-  - Tombol "Start" → membuka `ProjectPickerModal`.
-  - Setelah project dipilih → submit `Form` dengan intent `START_GOOGLE_TIMER` + source, itemId, itemTitle, projectId, projectName.
+- [x] **Task 17.2: Create GoogleItemCard Component**
+  - `apps/tracker/app/components/home/GoogleItemCard.tsx`.
+  - Menampilkan Calendar event / Task, source icon, waktu/due date.
+  - Tombol Start → ProjectPickerModal → submit Form `START_GOOGLE_TIMER`.
 
-- [ ] **Task 17.3: Add Source Tabs to Home Dashboard**
-  - Tambah tab navigasi di `home.tsx` (atas main content): "Basecamp" | "Calendar" | "Tasks".
-  - State: `activeTab` (default `"basecamp"`).
-  - Tab "Basecamp": tampilan existing (sidebar project + task cards).
-  - Tab "Calendar": list `GoogleItemCard` untuk event hari ini.
-  - Tab "Tasks": list `GoogleItemCard` untuk Google Tasks (dikelompokkan per task list).
+- [x] **Task 17.3: Add Source Tabs to Home Dashboard**
+  - Tab navigasi di `home.tsx` header: Basecamp | Calendar | Tasks.
+  - Tab "Basecamp": sidebar project + TaskCard (existing).
+  - Tab "Calendar": GoogleItemCard untuk event hari ini.
+  - Tab "Tasks": GoogleItemCard untuk Google Tasks.
 
-- [ ] **Task 17.4: Update Loader in `home.tsx`**
-  - Fetch `timesheetProjects` (daftar project dengan `timesheet_enabled`) — untuk project picker.
+- [x] **Task 17.4: Update Loader in `home.tsx`**
+  - Fetch `timesheetProjects` dari `fetchProjectDetails` (filter `timesheet_enabled`).
   - Fetch Google Calendar events (hari ini) jika user terkoneksi Google.
   - Fetch Google Tasks jika user terkoneksi Google.
-  - Return `timesheetProjects`, `calendarEvents`, `googleTasks` ke client.
+  - Return `timesheetProjects`, `calendarEvents`, `googleTasks`.
 
-- [ ] **Task 17.5: Add Action Intent `START_GOOGLE_TIMER`**
-  - Handle intent di `action()` function `home.tsx`.
-  - Terima `source`, `itemId`, `itemTitle`, `projectId`, `projectName` dari form.
-  - Panggil `startTimer(user.id, { todoId, todoTitle, projectId, projectName, source })`.
+- [x] **Task 17.5: Add Action Intent `START_GOOGLE_TIMER`**
+  - Handle intent di `action()`: source, itemId, itemTitle, projectId, projectName.
+  - Panggil `startTimer(user.id, { ..., source })`.
 
-- [ ] **Task 17.6: Update ActiveTimerCard**
-  - Tampilkan ikon kecil sesuai source (Calendar icon / CheckSquare icon / default Basecamp).
-  - Jika source bukan BASECAMP, tampilkan label source di samping project name.
+- [x] **Task 17.6: Update ActiveTimerCard**
+  - Badge source (Calendar icon / CheckSquare icon) di samping project name.
+  - Hanya tampil jika source bukan BASECAMP.
 
 ## Phase 18: Polish & Edge Cases
 
