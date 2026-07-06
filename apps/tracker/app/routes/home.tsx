@@ -6,6 +6,7 @@ import { getSession, getUserFromSessionId } from "../utils/session.server";
 import { fetchAssignments, fetchProjectDetails, getValidAccessToken } from "../utils/basecamp.server";
 import { startTimer, stopTimer, getActiveTimer, getPendingApprovals, approveTimeEntry } from "../services/timer.server";
 import { updateUserSettings, generateNewApiKey } from "../services/user.server";
+import { disconnectGoogle } from "../utils/google.server";
 import { Button } from "../components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "../components/ui/card";
 
@@ -48,13 +49,13 @@ export async function loader({ request }: Route.LoaderArgs) {
   const sessionId = session.get("sessionId");
 
   if (!sessionId) {
-    return { user: null, groupedAssignments: [], activeTimer: null };
+    return { user: null, groupedAssignments: [], activeTimer: null, googleConnected: false };
   }
 
   const user = await getUserFromSessionId(sessionId);
 
   if (!user) {
-    return { user: null, groupedAssignments: [], activeTimer: null, pendingApprovals: [] };
+    return { user: null, groupedAssignments: [], activeTimer: null, pendingApprovals: [], googleConnected: false };
   }
   
   let groupedAssignments: GroupedAssignment[] = [];
@@ -128,6 +129,7 @@ export async function loader({ request }: Route.LoaderArgs) {
       autoStopThresholdHours: user.autoStopThresholdHours,
       apiKey: user.apiKey
     },
+    googleConnected: !!user.googleAccessToken,
     groupedAssignments,
     activeTimer,
     pendingApprovals,
@@ -185,11 +187,16 @@ export async function action({ request }: Route.ActionArgs) {
     return { success: true };
   }
 
+  if (intent === "DISCONNECT_GOOGLE") {
+    await disconnectGoogle(user.id);
+    return { success: true };
+  }
+
   return { success: false };
 }
 
 export default function Home({ loaderData }: Route.ComponentProps) {
-  let { user, groupedAssignments, activeTimer: serverActiveTimer, pendingApprovals, wsUrl } = loaderData;
+  let { user, groupedAssignments, activeTimer: serverActiveTimer, pendingApprovals, wsUrl, googleConnected } = loaderData;
   const navigation = useNavigation();
 
   let activeTimer = serverActiveTimer;
@@ -304,6 +311,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
                   <SettingsModal 
                     defaultAutoStopHours={user.autoStopThresholdHours ?? 8} 
                     apiKey={user.apiKey}
+                    googleConnected={googleConnected}
                   />
                   <Form method="post" action="/auth/logout">
                     <Button type="submit" variant="ghost" size="icon" className="h-8 w-8 text-zinc-500 hover:text-red-500" title="Logout">

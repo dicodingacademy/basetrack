@@ -12,14 +12,15 @@ import {
 } from "../ui/dialog";
 import { Input } from "../ui/input";
 import { Label } from "../ui/label";
-import { Settings, Loader2 } from "lucide-react";
+import { Settings, Loader2, CheckCircle2, XCircle } from "lucide-react";
 
 type SettingsModalProps = {
   defaultAutoStopHours: number;
   apiKey?: string | null;
+  googleConnected?: boolean;
 };
 
-export function SettingsModal({ defaultAutoStopHours, apiKey }: SettingsModalProps) {
+export function SettingsModal({ defaultAutoStopHours, apiKey, googleConnected }: SettingsModalProps) {
   const [open, setOpen] = useState(false);
   const fetcher = useFetcher();
 
@@ -106,6 +107,61 @@ export function SettingsModal({ defaultAutoStopHours, apiKey }: SettingsModalPro
                       apiKey ? "Regenerate Key" : "Generate Key"
                     )}
                   </Button>
+                </div>
+              </div>
+            </div>
+
+            <div className="border-t pt-4">
+              <h4 className="text-sm font-medium mb-3">Google Integration</h4>
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  {googleConnected ? (
+                    <>
+                      <CheckCircle2 className="h-4 w-4 text-green-500" />
+                      <span className="text-sm text-green-600 dark:text-green-400">Connected</span>
+                    </>
+                  ) : (
+                    <>
+                      <XCircle className="h-4 w-4 text-zinc-400" />
+                      <span className="text-sm text-zinc-500">Not connected</span>
+                    </>
+                  )}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Connect your Google account to track time on Calendar events and Tasks.
+                </p>
+                <div className="flex justify-start">
+                  {googleConnected ? (
+                    <fetcher.Form method="post">
+                      <input type="hidden" name="intent" value="DISCONNECT_GOOGLE" />
+                      <Button
+                        type="submit"
+                        variant="outline"
+                        size="sm"
+                        disabled={fetcher.state !== "idle"}
+                      >
+                        {fetcher.state !== "idle" ? (
+                          <>
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            Disconnecting...
+                          </>
+                        ) : (
+                          "Disconnect Google"
+                        )}
+                      </Button>
+                    </fetcher.Form>
+                  ) : (
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => {
+                        window.location.href = "/auth/google";
+                      }}
+                    >
+                      Connect Google Account
+                    </Button>
+                  )}
                 </div>
               </div>
             </div>
