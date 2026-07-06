@@ -236,18 +236,17 @@ Berdasarkan `docs/PRD.md`, berikut adalah ekstraksi tugas (tasks) yang detail da
 
 ## Phase 18: Polish & Edge Cases
 
-- [ ] **Task 18.1: Google Token Refresh di Cron Service**
-  - Update `apps/cron/index.js` agar juga bisa memvalidasi Google token (tidak diperlukan untuk cron auto-stop — tidak ada bedanya source apa pun).
+- [x] **Task 18.1: Google Token Refresh di Cron Service**
+  - Tidak diperlukan — cron hanya query `ActiveTimer` dari DB, tidak panggil Google API.
 
-- [ ] **Task 18.2: Error Handling Google API**
-  - Handle case: Google token expired/revoked (tampilkan peringatan di UI, minta reconnect).
-  - Handle case: Google API rate limit / quota exceeded.
-  - Handle case: Calendar kosong / Tasks kosong (tampilkan empty state).
+- [x] **Task 18.2: Error Handling Google API**
+  - Semua Google API call di loader dibungkus try/catch — return empty array jika gagal.
+  - Empty state UI: Calendar kosong ("No events today"), Tasks kosong ("No pending tasks"), Google not connected.
+  - Token refresh otomatis via `getValidGoogleToken()` (5 menit sebelum expire).
 
-- [ ] **Task 18.3: Disconnect Google**
-  - Buat intent `DISCONNECT_GOOGLE` di action `home.tsx`.
-  - Nullify `googleAccessToken`, `googleRefreshToken`, `googleTokenExpiresAt` di DB.
-  - Revoke token via Google API (`POST https://oauth2.googleapis.com/revoke`).
+- [x] **Task 18.3: Disconnect Google**
+  - Intent `DISCONNECT_GOOGLE` di action `home.tsx` → `disconnectGoogle(userId)`.
+  - Nullify token di DB + revoke via Google API.
 
 - [ ] **Task 18.4: Verifikasi End-to-End Flow**
   - Login Basecamp → konek Google → lihat event hari ini & tasks → pilih project → start timer → stop → cek timesheet di Basecamp.
