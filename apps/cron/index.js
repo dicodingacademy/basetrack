@@ -56,6 +56,7 @@ cron.schedule("* * * * *", async () => {
               durationSec: Math.floor(elapsedMs / 1000),
               stopReason: "AUTO_STOPPED",
               syncStatus: "NEEDS_APPROVAL",
+              source: timer.source,
             },
           }),
           prisma.activeTimer.delete({

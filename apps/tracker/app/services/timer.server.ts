@@ -27,7 +27,7 @@ export async function getActiveTimer(userId: string) {
 
 export async function startTimer(
   userId: string,
-  data: { todoId: string; todoTitle: string; projectId: string; projectName: string }
+  data: { todoId: string; todoTitle: string; projectId: string; projectName: string; source?: string }
 ) {
   await prisma.activeTimer.deleteMany({ where: { userId } });
 
@@ -35,6 +35,7 @@ export async function startTimer(
     data: {
       userId,
       ...data,
+      source: data.source || "BASECAMP",
     },
   });
 
@@ -89,6 +90,7 @@ export async function stopTimer(userId: string, basecampId: string) {
       durationSec,
       stopReason: "MANUAL",
       syncStatus,
+      source: activeTimer.source,
     },
   });
 
