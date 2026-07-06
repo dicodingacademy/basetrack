@@ -135,5 +135,134 @@ Berdasarkan `docs/PRD.md`, berikut adalah ekstraksi tugas (tasks) yang detail da
   - Saat tombol "Start"/"Stop" ditekan di desktop, kirim request ke API server web (dengan header Authorization berisi API Key) untuk memodifikasi database.
   - Server yang memodifikasi database kemudian otomatis menjalankan *Task 9.3* (Broadcasting), sehingga Desktop dan Web tetap konsisten.
 
+## Phase 13: Google OAuth & Token Management
+
+- [x] **Task 13.1: Update Prisma Schema (Google Token Columns)**
+  - Tambah kolom `googleAccessToken String?`, `googleRefreshToken String?`, `googleTokenExpiresAt DateTime?` pada model `User`.
+  - Migration: `20260706131251_add_google_tokens`.
+
+- [ ] **Task 13.2: Setup Google Cloud Console OAuth App**
+  - Buat OAuth 2.0 Web Application di Google Cloud Console.
+  - Dapatkan `GOOGLE_CLIENT_ID` dan `GOOGLE_CLIENT_SECRET`.
+  - Tambahkan `http://localhost:5173/auth/google/callback` ke Authorized Redirect URIs.
+  - Simpan secrets di `.env`.
+
+- [x] **Task 13.3: Create Google OAuth Utility (`google.server.ts`)**
+  - `apps/tracker/app/utils/google.server.ts`.
+  - Fungsi: `getGoogleAuthUrl(state)`, `exchangeGoogleCode(code)`, `refreshGoogleToken(refreshToken)`, `getValidGoogleToken(userId)`, `disconnectGoogle(userId)`, `revokeGoogleToken(accessToken)`.
+
+- [x] **Task 13.4: Google OAuth Route - Authorization**
+  - `apps/tracker/app/routes/auth.google.tsx`.
+  - Generate CSRF `state`, simpan di cookie session, redirect ke Google OAuth URL.
+  - Scopes: `calendar.readonly`, `tasks.readonly`.
+
+- [x] **Task 13.5: Google OAuth Route - Callback**
+  - `apps/tracker/app/routes/auth.google.callback.tsx`.
+  - Validasi CSRF `state`, exchange `code` → token, simpan ke DB.
+  - Hanya bisa jika user sudah login Basecamp.
+
+- [x] **Task 13.6: Register New Routes**
+  - `apps/tracker/app/routes.ts`: tambah route `auth/google` dan `auth/google/callback`.
+
+- [x] **Task 13.7: Update SettingsModal - Connect Google**
+  - Section "Google Integration" di SettingsModal.
+  - Status koneksi (Connected/Not connected).
+  - Tombol "Connect Google Account" / "Disconnect Google".
+  - Intent `DISCONNECT_GOOGLE` di action `home.tsx`.
+
+## Phase 14: Google Calendar API Integration
+
+- [ ] **Task 14.1: Fetch Calendar Events**
+  - Implementasi `fetchCalendarEvents(accessToken, date)` di `google.server.ts`.
+  - Panggil `GET https://www.googleapis.com/calendar/v3/calendars/primary/events`.
+  - Parameter: `timeMin` = start of day, `timeMax` = end of day, `singleEvents: true`, `orderBy: startTime`.
+  - Return type: `GoogleCalendarEvent[]` dengan id, summary, start, end.
+
+- [ ] **Task 14.2: Fetch Task Lists & Tasks**
+  - Implementasi `fetchTaskLists(accessToken)` → `GET https://tasks.googleapis.com/tasks/v1/users/@me/lists`.
+  - Implementasi `fetchTasks(accessToken, taskListId)` → `GET https://tasks.googleapis.com/tasks/v1/lists/{taskListId}/tasks`.
+  - Filter: hanya task dengan `status != "completed"` (atau `hidden != true`).
+  - Return type: `GoogleTask[]` dengan id, title, notes, due, taskListId, taskListName.
+
+- [ ] **Task 14.3: Define Google TypeScript Types**
+  - Buat `apps/tracker/app/types/google.ts`.
+  - `GoogleCalendarEvent`, `GoogleTask`, `TimerSource` enum.
+
+## Phase 15: Database Schema Update (Source Tracking)
+
+- [ ] **Task 15.1: Tambah Enum TimerSource**
+  - Buat enum `TimerSource` di `schema.prisma`: `BASECAMP`, `GOOGLE_CALENDAR`, `GOOGLE_TASKS`.
+
+- [ ] **Task 15.2: Tambah Kolom `source` ke ActiveTimer & TimeEntry**
+  - `ActiveTimer`: tambah field `source TimerSource @default(BASECAMP)`.
+  - `TimeEntry`: tambah field `source TimerSource @default(BASECAMP)`.
+  - Jalankan `prisma migrate dev`.
+
+## Phase 16: Update Timer Service (Multi-Source)
+
+- [ ] **Task 16.1: Update `startTimer` Function**
+  - Modifikasi signature: terima parameter `source` (`TimerSource`, default `BASECAMP`).
+  - Simpan `source` ke record `ActiveTimer` di database.
+
+- [ ] **Task 16.2: Update `stopTimer` Function**
+  - Saat membuat `TimeEntry`, copy field `source` dari `ActiveTimer` yang dihapus.
+  - Tidak ada perubahan logika sync ke Basecamp Timesheet (projectId sudah sesuai dari yang dipilih user).
+
+## Phase 17: UI - Source Tabs & Google Items
+
+- [ ] **Task 17.1: Create ProjectPickerModal Component**
+  - Buat `apps/tracker/app/components/home/ProjectPickerModal.tsx`.
+  - Dialog yang menampilkan daftar Basecamp project (hanya yang `timesheet_enabled`).
+  - Props: `projects: { id: string; name: string }[]`, `onSelect: (project) => void`, `children: ReactNode` (trigger).
+  - User klik salah satu project → emit callback → submit form dengan intent `START_GOOGLE_TIMER`.
+
+- [ ] **Task 17.2: Create GoogleItemCard Component**
+  - Buat `apps/tracker/app/components/home/GoogleItemCard.tsx`.
+  - Menampilkan item dari Google Calendar/Tasks (title, waktu/date, source icon).
+  - Tombol "Start" → membuka `ProjectPickerModal`.
+  - Setelah project dipilih → submit `Form` dengan intent `START_GOOGLE_TIMER` + source, itemId, itemTitle, projectId, projectName.
+
+- [ ] **Task 17.3: Add Source Tabs to Home Dashboard**
+  - Tambah tab navigasi di `home.tsx` (atas main content): "Basecamp" | "Calendar" | "Tasks".
+  - State: `activeTab` (default `"basecamp"`).
+  - Tab "Basecamp": tampilan existing (sidebar project + task cards).
+  - Tab "Calendar": list `GoogleItemCard` untuk event hari ini.
+  - Tab "Tasks": list `GoogleItemCard` untuk Google Tasks (dikelompokkan per task list).
+
+- [ ] **Task 17.4: Update Loader in `home.tsx`**
+  - Fetch `timesheetProjects` (daftar project dengan `timesheet_enabled`) — untuk project picker.
+  - Fetch Google Calendar events (hari ini) jika user terkoneksi Google.
+  - Fetch Google Tasks jika user terkoneksi Google.
+  - Return `timesheetProjects`, `calendarEvents`, `googleTasks` ke client.
+
+- [ ] **Task 17.5: Add Action Intent `START_GOOGLE_TIMER`**
+  - Handle intent di `action()` function `home.tsx`.
+  - Terima `source`, `itemId`, `itemTitle`, `projectId`, `projectName` dari form.
+  - Panggil `startTimer(user.id, { todoId, todoTitle, projectId, projectName, source })`.
+
+- [ ] **Task 17.6: Update ActiveTimerCard**
+  - Tampilkan ikon kecil sesuai source (Calendar icon / CheckSquare icon / default Basecamp).
+  - Jika source bukan BASECAMP, tampilkan label source di samping project name.
+
+## Phase 18: Polish & Edge Cases
+
+- [ ] **Task 18.1: Google Token Refresh di Cron Service**
+  - Update `apps/cron/index.js` agar juga bisa memvalidasi Google token (tidak diperlukan untuk cron auto-stop — tidak ada bedanya source apa pun).
+
+- [ ] **Task 18.2: Error Handling Google API**
+  - Handle case: Google token expired/revoked (tampilkan peringatan di UI, minta reconnect).
+  - Handle case: Google API rate limit / quota exceeded.
+  - Handle case: Calendar kosong / Tasks kosong (tampilkan empty state).
+
+- [ ] **Task 18.3: Disconnect Google**
+  - Buat intent `DISCONNECT_GOOGLE` di action `home.tsx`.
+  - Nullify `googleAccessToken`, `googleRefreshToken`, `googleTokenExpiresAt` di DB.
+  - Revoke token via Google API (`POST https://oauth2.googleapis.com/revoke`).
+
+- [ ] **Task 18.4: Verifikasi End-to-End Flow**
+  - Login Basecamp → konek Google → lihat event hari ini & tasks → pilih project → start timer → stop → cek timesheet di Basecamp.
+  - Test auto-switch: start Google item saat Basecamp timer berjalan → timer lama auto-stop.
+  - Test auto-stop cron pada timer dari Google source.
+
 ---
 *Catatan: Open questions dari PRD (seperti retry strategy detail atau endpoint assignment) dapat dievaluasi lebih dalam saat memasuki Phase 4 dan Phase 7.*
