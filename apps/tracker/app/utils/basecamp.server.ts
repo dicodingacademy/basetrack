@@ -165,3 +165,32 @@ export async function createTimesheetEntry(
 
   return response.json();
 }
+
+export async function getProjectTimesheetRecordingId(
+  accountId: string,
+  projectId: string,
+  accessToken: string
+): Promise<string | null> {
+  const response = await fetch(
+    `https://3.basecampapi.com/${accountId}/projects/${projectId}/timesheet.json`,
+    {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "User-Agent": "BaseTrack (app@basetrack.local)",
+      },
+    }
+  );
+
+  if (!response.ok) return null;
+
+  const entries = await response.json() as any[];
+  if (!entries || entries.length === 0) return null;
+
+  for (const entry of entries) {
+    if (entry.parent?.type === "Timesheet") {
+      return entry.parent.id.toString();
+    }
+  }
+
+  return null;
+}

@@ -1,5 +1,5 @@
 import { prisma } from "../utils/db.server";
-import { getValidAccessToken, createTimesheetEntry } from "../utils/basecamp.server";
+import { getValidAccessToken, createTimesheetEntry, getProjectTimesheetRecordingId } from "../utils/basecamp.server";
 
 export async function notifyWebSocketServer(userId: string, event: any) {
   try {
@@ -63,12 +63,21 @@ export async function stopTimer(userId: string, basecampId: string) {
       const yyyy = stoppedAt.getFullYear();
       const mm = String(stoppedAt.getMonth() + 1).padStart(2, "0");
       const dd = String(stoppedAt.getDate()).padStart(2, "0");
-
-      await createTimesheetEntry(basecampId, activeTimer.todoId, accessToken, {
+      const payload = {
         date: `${yyyy}-${mm}-${dd}`,
         hours: Number(durationHours.toFixed(2)),
-        description: "Tracked via BaseTrack",
-      });
+        description: activeTimer.source === "BASECAMP" ? "Tracked via BaseTrack" : activeTimer.todoTitle,
+      };
+
+      if (activeTimer.source === "BASECAMP") {
+        await createTimesheetEntry(basecampId, activeTimer.todoId, accessToken, payload);
+      } else {
+        const recordingId = await getProjectTimesheetRecordingId(basecampId, activeTimer.projectId, accessToken);
+        if (!recordingId) {
+          throw new Error("No timesheet recording found for project");
+        }
+        await createTimesheetEntry(basecampId, recordingId, accessToken, payload);
+      }
       syncStatus = "SYNCED";
     } catch (err) {
       console.error("Failed to sync timesheet entry:", err);
@@ -130,12 +139,21 @@ export async function approveTimeEntry(
     const yyyy = stoppedAt.getFullYear();
     const mm = String(stoppedAt.getMonth() + 1).padStart(2, "0");
     const dd = String(stoppedAt.getDate()).padStart(2, "0");
-
-    await createTimesheetEntry(basecampId, entry.todoId, accessToken, {
+    const payload = {
       date: `${yyyy}-${mm}-${dd}`,
       hours: Number(durationHours.toFixed(2)),
-      description: "Tracked via BaseTrack",
-    });
+      description: entry.source === "BASECAMP" ? "Tracked via BaseTrack" : entry.todoTitle,
+    };
+
+    if (entry.source === "BASECAMP") {
+      await createTimesheetEntry(basecampId, entry.todoId, accessToken, payload);
+    } else {
+      const recordingId = await getProjectTimesheetRecordingId(basecampId, entry.projectId, accessToken);
+      if (!recordingId) {
+        throw new Error("No timesheet recording found for project");
+      }
+      await createTimesheetEntry(basecampId, recordingId, accessToken, payload);
+    }
     newStatus = "SYNCED";
   } catch (err) {
     console.error("Failed to sync timesheet entry on approval:", err);
