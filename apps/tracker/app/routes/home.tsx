@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { useNavigation, Form } from "react-router";
+import { useState, Suspense } from "react";
+import { useNavigation, Form, Await } from "react-router";
 
 import type { Route } from "./+types/home";
 import { getSession, getUserFromSessionId } from "../utils/session.server";
@@ -10,9 +10,11 @@ import { updateUserSettings, generateNewApiKey } from "../services/user.server";
 import { disconnectGoogle } from "../utils/google.server";
 import { Button } from "../components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "../components/ui/card";
+import { Skeleton } from "../components/ui/skeleton";
 
 import { Avatar, AvatarFallback } from "../components/ui/avatar";
 import { useTimerWebSocket } from "../hooks/useTimerWebSocket";
+import { useTimerTitle } from "../hooks/useTimerTitle";
 
 import {
   Sidebar,
@@ -39,6 +41,14 @@ import { Clock, Briefcase, LayoutDashboard, CheckCircle2, ArrowRight, LogOut, Li
 import type { BasecampAssignment, BasecampProject, GroupedAssignment, GroupedTask } from "../types/basecamp";
 import type { GoogleCalendarEvent, GoogleTask, TimerSource } from "../types/google";
 
+type AppData = {
+  groupedAssignments: GroupedAssignment[];
+  pendingApprovals: any[];
+  timesheetProjects: { id: string; name: string }[];
+  calendarEvents: GoogleCalendarEvent[];
+  googleTasks: GoogleTask[];
+};
+
 export function meta(_args: Route.MetaArgs) {
   return [
     { title: "Basetrack - Basecamp Time Tracker" },
@@ -46,28 +56,14 @@ export function meta(_args: Route.MetaArgs) {
   ];
 }
 
-export async function loader({ request }: Route.LoaderArgs) {
-  const cookie = request.headers.get("Cookie");
-  const session = await getSession(cookie);
-  const sessionId = session.get("sessionId");
-
-  if (!sessionId) {
-    return { user: null, groupedAssignments: [], activeTimer: null, googleConnected: false, timesheetProjects: [], calendarEvents: [], googleTasks: [] };
-  }
-
-  const user = await getUserFromSessionId(sessionId);
-
-  if (!user) {
-    return { user: null, groupedAssignments: [], activeTimer: null, pendingApprovals: [], googleConnected: false, timesheetProjects: [], calendarEvents: [], googleTasks: [] };
-  }
-  
+async function loadData(user: any): Promise<AppData> {
   let groupedAssignments: GroupedAssignment[] = [];
   let rawProjects: any[] = [];
-  
+
   try {
     const accessToken = await getValidAccessToken(user.id);
     const rawAssignments = await fetchAssignments(user.basecampId, accessToken);
-    
+
     let items = [];
     if (Array.isArray(rawAssignments)) {
       items = rawAssignments;
@@ -77,7 +73,7 @@ export async function loader({ request }: Route.LoaderArgs) {
 
     const uniqueBucketIds = Array.from(new Set(items.map((i: BasecampAssignment) => i.bucket?.id?.toString()).filter(Boolean))) as string[];
     rawProjects = await fetchProjectDetails(user.basecampId, uniqueBucketIds, accessToken);
-    
+
     const timesheetEnabledProjectIds = new Set(
       rawProjects
         .filter((p: BasecampProject) => p.timesheet_enabled)
@@ -116,13 +112,12 @@ export async function loader({ request }: Route.LoaderArgs) {
       });
       return acc;
     }, {});
-    
+
     groupedAssignments = Object.values(grouped);
   } catch (err) {
     console.error("Fetch assignments failed", err);
   }
 
-  const activeTimer = await getActiveTimer(user.id);
   const pendingApprovals = await getPendingApprovals(user.id);
 
   const timesheetProjects: { id: string; name: string }[] = [];
@@ -187,22 +182,38 @@ export async function loader({ request }: Route.LoaderArgs) {
     }
   }
 
+  return { groupedAssignments, pendingApprovals, timesheetProjects, calendarEvents, googleTasks };
+}
+
+export async function loader({ request }: Route.LoaderArgs) {
+  const cookie = request.headers.get("Cookie");
+  const session = await getSession(cookie);
+  const sessionId = session.get("sessionId");
+
+  if (!sessionId) {
+    return { user: null, activeTimer: null, googleConnected: false, data: null };
+  }
+
+  const user = await getUserFromSessionId(sessionId);
+
+  if (!user) {
+    return { user: null, activeTimer: null, googleConnected: false, data: null };
+  }
+
+  const activeTimer = await getActiveTimer(user.id);
+
   return {
-    user: { 
-      id: user.id, 
-      name: user.name, 
+    user: {
+      id: user.id,
+      name: user.name,
       email: user.email,
       autoStopThresholdHours: user.autoStopThresholdHours,
-      apiKey: user.apiKey
+      apiKey: user.apiKey,
     },
     googleConnected: !!user.googleAccessToken,
-    groupedAssignments,
     activeTimer,
-    pendingApprovals,
-    timesheetProjects,
-    calendarEvents,
-    googleTasks,
     wsUrl: process.env.WS_PUBLIC_URL || "ws://localhost:8081",
+    data: loadData(user),
   };
 }
 
@@ -247,16 +258,16 @@ export async function action({ request }: Route.ActionArgs) {
     if (!entryId || isNaN(durationHours)) {
       return new Response("Invalid data", { status: 400 });
     }
-    
+
     return await approveTimeEntry(user.id, entryId, user.basecampId, Math.floor(durationHours * 3600));
   }
-  
+
   if (intent === "UPDATE_SETTINGS") {
     const autoStopThresholdHours = parseInt(formData.get("autoStopThresholdHours") as string, 10);
     if (isNaN(autoStopThresholdHours) || autoStopThresholdHours < 1) {
       return new Response("Invalid value", { status: 400 });
     }
-    
+
     await updateUserSettings(user.id, autoStopThresholdHours);
     return { success: true };
   }
@@ -275,7 +286,7 @@ export async function action({ request }: Route.ActionArgs) {
 }
 
 export default function Home({ loaderData }: Route.ComponentProps) {
-  let { user, groupedAssignments, activeTimer: serverActiveTimer, pendingApprovals, wsUrl, googleConnected, timesheetProjects, calendarEvents, googleTasks } = loaderData;
+  const { user, activeTimer: serverActiveTimer, wsUrl, googleConnected } = loaderData;
   const navigation = useNavigation();
 
   let activeTimer = serverActiveTimer;
@@ -299,13 +310,10 @@ export default function Home({ loaderData }: Route.ComponentProps) {
     }
   }
 
-  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(
-    groupedAssignments.length > 0 ? groupedAssignments[0].projectId : null
-  );
-
   const [activeTab, setActiveTab] = useState<"basecamp" | "calendar" | "tasks">("basecamp");
 
   useTimerWebSocket(user?.apiKey, wsUrl);
+  useTimerTitle(activeTimer);
 
   if (!user) {
     return (
@@ -329,8 +337,6 @@ export default function Home({ loaderData }: Route.ComponentProps) {
       </div>
     );
   }
-
-  const selectedProject = groupedAssignments.find((p: GroupedAssignment) => p.projectId === selectedProjectId);
 
   return (
     <SidebarProvider>
@@ -390,31 +396,11 @@ export default function Home({ loaderData }: Route.ComponentProps) {
             </SidebarGroupContent>
           </SidebarGroup>
 
-          {activeTab === "basecamp" && (
-            <SidebarGroup>
-              <SidebarGroupLabel>Your Projects</SidebarGroupLabel>
-              <SidebarGroupContent>
-                <SidebarMenu>
-                  {groupedAssignments.map((project: GroupedAssignment) => {
-                    const isSelected = project.projectId === selectedProjectId;
-                    return (
-                      <SidebarMenuItem key={project.projectId}>
-                        <SidebarMenuButton 
-                          isActive={isSelected} 
-                          onClick={() => setSelectedProjectId(project.projectId)}
-                          className="min-w-0"
-                        >
-                          <Briefcase className="w-4 h-4 shrink-0" />
-                          <span title={project.projectName}>{project.projectName}</span>
-                        </SidebarMenuButton>
-                        <SidebarMenuBadge>{project.tasks.length}</SidebarMenuBadge>
-                      </SidebarMenuItem>
-                    );
-                  })}
-                </SidebarMenu>
-              </SidebarGroupContent>
-            </SidebarGroup>
-          )}
+          <Suspense fallback={<ProjectListSkeleton />}>
+            <Await resolve={loaderData.data}>
+              {(data) => data ? <ProjectList data={data} activeTab={activeTab} /> : null}
+            </Await>
+          </Suspense>
         </SidebarContent>
 
         <SidebarFooter>
@@ -431,8 +417,8 @@ export default function Home({ loaderData }: Route.ComponentProps) {
                   <span className="truncate text-xs text-zinc-500 dark:text-zinc-400">{user.email}</span>
                 </div>
                 <div onClick={(e) => e.stopPropagation()} className="flex items-center gap-1">
-                  <SettingsModal 
-                    defaultAutoStopHours={user.autoStopThresholdHours ?? 8} 
+                  <SettingsModal
+                    defaultAutoStopHours={user.autoStopThresholdHours ?? 8}
                     apiKey={user.apiKey}
                     googleConnected={googleConnected}
                   />
@@ -463,143 +449,267 @@ export default function Home({ loaderData }: Route.ComponentProps) {
           </div>
         </header>
 
-        <div className="flex-1 p-6">
-          <div className="max-w-6xl mx-auto w-full">
-            {activeTab === "basecamp" ? (
-              <>
-                {pendingApprovals && pendingApprovals.length > 0 && (
-                  <PendingApprovals approvals={pendingApprovals} />
-                )}
-                <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 items-start">
-                <div className="xl:col-span-2 space-y-6">
-                  {groupedAssignments.length === 0 ? (
-                    <Card className="border-dashed shadow-none">
-                      <CardContent className="flex flex-col items-center justify-center py-12 text-center">
-                        <CheckCircle2 className="w-12 h-12 text-muted-foreground mb-4" />
-                        <p className="text-lg font-medium">You're all caught up!</p>
-                        <p className="text-sm text-muted-foreground mt-1">No active assignments found in Basecamp.</p>
-                      </CardContent>
-                    </Card>
-                  ) : selectedProject ? (
-                    <Card className="shadow-sm">
-                      <CardHeader>
-                        <CardTitle>Assigned Tasks</CardTitle>
-                        <CardDescription>Select a task to start tracking your time.</CardDescription>
-                      </CardHeader>
-                      <CardContent className="grid gap-3">
-                        {selectedProject.tasks.map((task: GroupedTask) => (
-                          <TaskCard 
-                            key={task.id} 
-                            task={task} 
-                            selectedProject={selectedProject} 
-                            activeTimer={activeTimer} 
-                          />
-                        ))}
-                      </CardContent>
-                    </Card>
-                  ) : null}
-                </div>
-
-                <div className="xl:col-span-1 sticky top-24">
-                  <ActiveTimerCard activeTimer={activeTimer} />
-                </div>
-                </div>
-              </>
-            ) : activeTab === "calendar" ? (
-              <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 items-start">
-                <div className="xl:col-span-2 space-y-6">
-                  {!googleConnected ? (
-                    <Card className="border-dashed shadow-none">
-                      <CardContent className="flex flex-col items-center justify-center py-12 text-center">
-                        <Calendar className="w-12 h-12 text-muted-foreground mb-4" />
-                        <p className="text-lg font-medium">Google Calendar not connected</p>
-                        <p className="text-sm text-muted-foreground mt-1">
-                          Connect your Google account in Settings to see your calendar events here.
-                        </p>
-                      </CardContent>
-                    </Card>
-                  ) : calendarEvents.length === 0 ? (
-                    <Card className="border-dashed shadow-none">
-                      <CardContent className="flex flex-col items-center justify-center py-12 text-center">
-                        <Calendar className="w-12 h-12 text-muted-foreground mb-4" />
-                        <p className="text-lg font-medium">No events today</p>
-                        <p className="text-sm text-muted-foreground mt-1">You have no calendar events scheduled for today.</p>
-                      </CardContent>
-                    </Card>
-                  ) : (
-                    <Card className="shadow-sm">
-                      <CardHeader>
-                        <CardTitle>Today's Events</CardTitle>
-                        <CardDescription>Select an event and pick a Basecamp project to start tracking.</CardDescription>
-                      </CardHeader>
-                      <CardContent className="grid gap-3">
-                        {calendarEvents.map((event: GoogleCalendarEvent) => (
-                          <GoogleItemCard
-                            key={event.id}
-                            item={event}
-                            source="GOOGLE_CALENDAR"
-                            projects={timesheetProjects}
-                            isActive={activeTimer?.todoId === event.id}
-                          />
-                        ))}
-                      </CardContent>
-                    </Card>
-                  )}
-                </div>
-                <div className="xl:col-span-1 sticky top-24">
-                  <ActiveTimerCard activeTimer={activeTimer} />
-                </div>
-              </div>
+        <Suspense fallback={<ContentSkeleton />}>
+          <Await resolve={loaderData.data}>
+            {(data) => data ? (
+              <DashboardContent
+                data={data}
+                activeTab={activeTab}
+                activeTimer={activeTimer}
+                googleConnected={googleConnected}
+              />
             ) : (
-              <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 items-start">
-                <div className="xl:col-span-2 space-y-6">
-                  {!googleConnected ? (
-                    <Card className="border-dashed shadow-none">
-                      <CardContent className="flex flex-col items-center justify-center py-12 text-center">
-                        <ListTodo className="w-12 h-12 text-muted-foreground mb-4" />
-                        <p className="text-lg font-medium">Google Tasks not connected</p>
-                        <p className="text-sm text-muted-foreground mt-1">
-                          Connect your Google account in Settings to see your tasks here.
-                        </p>
-                      </CardContent>
-                    </Card>
-                  ) : googleTasks.length === 0 ? (
-                    <Card className="border-dashed shadow-none">
-                      <CardContent className="flex flex-col items-center justify-center py-12 text-center">
-                        <ListTodo className="w-12 h-12 text-muted-foreground mb-4" />
-                        <p className="text-lg font-medium">No pending tasks</p>
-                        <p className="text-sm text-muted-foreground mt-1">You have no pending tasks in Google Tasks.</p>
-                      </CardContent>
-                    </Card>
-                  ) : (
-                    <Card className="shadow-sm">
-                      <CardHeader>
-                        <CardTitle>Google Tasks</CardTitle>
-                        <CardDescription>Select a task and pick a Basecamp project to start tracking.</CardDescription>
-                      </CardHeader>
-                      <CardContent className="grid gap-3">
-                        {googleTasks.map((task: GoogleTask) => (
-                          <GoogleItemCard
-                            key={task.id}
-                            item={task}
-                            source="GOOGLE_TASKS"
-                            projects={timesheetProjects}
-                            isActive={activeTimer?.todoId === task.id}
-                          />
-                        ))}
-                      </CardContent>
-                    </Card>
-                  )}
-                </div>
-                <div className="xl:col-span-1 sticky top-24">
-                  <ActiveTimerCard activeTimer={activeTimer} />
-                </div>
-              </div>
+              <ContentSkeleton />
             )}
-          </div>
-        </div>
+          </Await>
+        </Suspense>
       </SidebarInset>
     </SidebarProvider>
   );
 }
 
+function ProjectListSkeleton() {
+  return (
+    <SidebarGroup>
+      <SidebarGroupLabel>Your Projects</SidebarGroupLabel>
+      <SidebarGroupContent>
+        <SidebarMenu>
+          {[1, 2, 3].map((i) => (
+            <SidebarMenuItem key={i}>
+              <SidebarMenuButton className="min-w-0">
+                <Skeleton className="h-4 w-4 rounded" />
+                <Skeleton className="h-4 flex-1" />
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          ))}
+        </SidebarMenu>
+      </SidebarGroupContent>
+    </SidebarGroup>
+  );
+}
+
+function ContentSkeleton() {
+  return (
+    <div className="flex-1 p-6">
+      <div className="max-w-6xl mx-auto w-full">
+        <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 items-start">
+          <div className="xl:col-span-2 space-y-4">
+            <Card className="shadow-sm">
+              <CardHeader>
+                <Skeleton className="h-5 w-32" />
+                <Skeleton className="h-4 w-64 mt-1" />
+              </CardHeader>
+              <CardContent className="grid gap-3">
+                {[1, 2, 3, 4].map((i) => (
+                  <div key={i} className="p-4 rounded-xl border flex gap-4 items-center">
+                    <Skeleton className="h-4 w-4 shrink-0" />
+                    <Skeleton className="h-4 flex-1" />
+                    <Skeleton className="h-8 w-24 shrink-0 rounded-md" />
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          </div>
+          <div className="xl:col-span-1">
+            <Card>
+              <CardHeader>
+                <Skeleton className="h-4 w-24" />
+              </CardHeader>
+              <CardContent className="flex flex-col items-center py-8">
+                <Skeleton className="h-10 w-10 rounded-full mb-4" />
+                <Skeleton className="h-4 w-32" />
+                <Skeleton className="h-3 w-48 mt-1" />
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ProjectList({ data, activeTab }: { data: AppData; activeTab: string }) {
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(
+    data.groupedAssignments.length > 0 ? data.groupedAssignments[0].projectId : null
+  );
+
+  if (activeTab !== "basecamp") return null;
+
+  return (
+    <SidebarGroup>
+      <SidebarGroupLabel>Your Projects</SidebarGroupLabel>
+      <SidebarGroupContent>
+        <SidebarMenu>
+          {data.groupedAssignments.map((project: GroupedAssignment) => {
+            const isSelected = project.projectId === selectedProjectId;
+            return (
+              <SidebarMenuItem key={project.projectId}>
+                <SidebarMenuButton
+                  isActive={isSelected}
+                  onClick={() => setSelectedProjectId(project.projectId)}
+                  className="min-w-0"
+                >
+                  <Briefcase className="w-4 h-4 shrink-0" />
+                  <span title={project.projectName}>{project.projectName}</span>
+                </SidebarMenuButton>
+                <SidebarMenuBadge>{project.tasks.length}</SidebarMenuBadge>
+              </SidebarMenuItem>
+            );
+          })}
+        </SidebarMenu>
+      </SidebarGroupContent>
+    </SidebarGroup>
+  );
+}
+
+function DashboardContent({ data, activeTab, activeTimer, googleConnected }: {
+  data: AppData;
+  activeTab: string;
+  activeTimer: any;
+  googleConnected: boolean;
+}) {
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(
+    data.groupedAssignments.length > 0 ? data.groupedAssignments[0].projectId : null
+  );
+
+  const selectedProject = data.groupedAssignments.find(
+    (p: GroupedAssignment) => p.projectId === selectedProjectId
+  );
+
+  return (
+    <div className="flex-1 p-6">
+      <div className="max-w-6xl mx-auto w-full">
+        {activeTab === "basecamp" ? (
+          <>
+            {data.pendingApprovals && data.pendingApprovals.length > 0 && (
+              <PendingApprovals approvals={data.pendingApprovals} />
+            )}
+            <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 items-start">
+              <div className="xl:col-span-2 space-y-6">
+                {data.groupedAssignments.length === 0 ? (
+                  <Card className="border-dashed shadow-none">
+                    <CardContent className="flex flex-col items-center justify-center py-12 text-center">
+                      <CheckCircle2 className="w-12 h-12 text-muted-foreground mb-4" />
+                      <p className="text-lg font-medium">You're all caught up!</p>
+                      <p className="text-sm text-muted-foreground mt-1">No active assignments found in Basecamp.</p>
+                    </CardContent>
+                  </Card>
+                ) : selectedProject ? (
+                  <Card className="shadow-sm">
+                    <CardHeader>
+                      <CardTitle>Assigned Tasks</CardTitle>
+                      <CardDescription>Select a task to start tracking your time.</CardDescription>
+                    </CardHeader>
+                    <CardContent className="grid gap-3">
+                      {selectedProject.tasks.map((task: GroupedTask) => (
+                        <TaskCard
+                          key={task.id}
+                          task={task}
+                          selectedProject={selectedProject}
+                          activeTimer={activeTimer}
+                        />
+                      ))}
+                    </CardContent>
+                  </Card>
+                ) : null}
+              </div>
+              <div className="xl:col-span-1 sticky top-24">
+                <ActiveTimerCard activeTimer={activeTimer} />
+              </div>
+            </div>
+          </>
+        ) : activeTab === "calendar" ? (
+          <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 items-start">
+            <div className="xl:col-span-2 space-y-6">
+              {!googleConnected ? (
+                <Card className="border-dashed shadow-none">
+                  <CardContent className="flex flex-col items-center justify-center py-12 text-center">
+                    <Calendar className="w-12 h-12 text-muted-foreground mb-4" />
+                    <p className="text-lg font-medium">Google Calendar not connected</p>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      Connect your Google account in Settings to see your calendar events here.
+                    </p>
+                  </CardContent>
+                </Card>
+              ) : data.calendarEvents.length === 0 ? (
+                <Card className="border-dashed shadow-none">
+                  <CardContent className="flex flex-col items-center justify-center py-12 text-center">
+                    <Calendar className="w-12 h-12 text-muted-foreground mb-4" />
+                    <p className="text-lg font-medium">No events today</p>
+                    <p className="text-sm text-muted-foreground mt-1">You have no calendar events scheduled for today.</p>
+                  </CardContent>
+                </Card>
+              ) : (
+                <Card className="shadow-sm">
+                  <CardHeader>
+                    <CardTitle>Today's Events</CardTitle>
+                    <CardDescription>Select an event and pick a Basecamp project to start tracking.</CardDescription>
+                  </CardHeader>
+                  <CardContent className="grid gap-3">
+                    {data.calendarEvents.map((event: GoogleCalendarEvent) => (
+                      <GoogleItemCard
+                        key={event.id}
+                        item={event}
+                        source="GOOGLE_CALENDAR"
+                        projects={data.timesheetProjects}
+                        isActive={activeTimer?.todoId === event.id}
+                      />
+                    ))}
+                  </CardContent>
+                </Card>
+              )}
+            </div>
+            <div className="xl:col-span-1 sticky top-24">
+              <ActiveTimerCard activeTimer={activeTimer} />
+            </div>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 items-start">
+            <div className="xl:col-span-2 space-y-6">
+              {!googleConnected ? (
+                <Card className="border-dashed shadow-none">
+                  <CardContent className="flex flex-col items-center justify-center py-12 text-center">
+                    <ListTodo className="w-12 h-12 text-muted-foreground mb-4" />
+                    <p className="text-lg font-medium">Google Tasks not connected</p>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      Connect your Google account in Settings to see your tasks here.
+                    </p>
+                  </CardContent>
+                </Card>
+              ) : data.googleTasks.length === 0 ? (
+                <Card className="border-dashed shadow-none">
+                  <CardContent className="flex flex-col items-center justify-center py-12 text-center">
+                    <ListTodo className="w-12 h-12 text-muted-foreground mb-4" />
+                    <p className="text-lg font-medium">No pending tasks</p>
+                    <p className="text-sm text-muted-foreground mt-1">You have no pending tasks in Google Tasks.</p>
+                  </CardContent>
+                </Card>
+              ) : (
+                <Card className="shadow-sm">
+                  <CardHeader>
+                    <CardTitle>Google Tasks</CardTitle>
+                    <CardDescription>Select a task and pick a Basecamp project to start tracking.</CardDescription>
+                  </CardHeader>
+                  <CardContent className="grid gap-3">
+                    {data.googleTasks.map((task: GoogleTask) => (
+                      <GoogleItemCard
+                        key={task.id}
+                        item={task}
+                        source="GOOGLE_TASKS"
+                        projects={data.timesheetProjects}
+                        isActive={activeTimer?.todoId === task.id}
+                      />
+                    ))}
+                  </CardContent>
+                </Card>
+              )}
+            </div>
+            <div className="xl:col-span-1 sticky top-24">
+              <ActiveTimerCard activeTimer={activeTimer} />
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
