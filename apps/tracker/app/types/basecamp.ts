@@ -30,6 +30,7 @@ export type BasecampAssignment = {
 
 export type BasecampProject = {
   id: number;
+  name?: string;
   timesheet_enabled: boolean;
 };
 
@@ -57,4 +58,5 @@ export type ActiveTimerType = {
   projectName: string;
   startedAt: Date;
   lastPingAt: Date;
+  source: string;
 };
