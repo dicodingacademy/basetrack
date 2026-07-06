@@ -28,6 +28,9 @@ model User {
   activeTimer            ActiveTimer?
   autoStopThresholdHours Int          @default(8)
   apiKey                 String?      @unique
+  googleAccessToken      String?
+  googleRefreshToken     String?
+  googleTokenExpiresAt   DateTime?
 }
 
 model Session {
