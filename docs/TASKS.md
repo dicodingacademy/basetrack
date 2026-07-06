@@ -172,21 +172,18 @@ Berdasarkan `docs/PRD.md`, berikut adalah ekstraksi tugas (tasks) yang detail da
 
 ## Phase 14: Google Calendar API Integration
 
-- [ ] **Task 14.1: Fetch Calendar Events**
-  - Implementasi `fetchCalendarEvents(accessToken, date)` di `google.server.ts`.
-  - Panggil `GET https://www.googleapis.com/calendar/v3/calendars/primary/events`.
-  - Parameter: `timeMin` = start of day, `timeMax` = end of day, `singleEvents: true`, `orderBy: startTime`.
-  - Return type: `GoogleCalendarEvent[]` dengan id, summary, start, end.
+- [x] **Task 14.1: Fetch Calendar Events**
+  - `fetchCalendarEvents(accessToken, date)` di `google.server.ts`.
+  - `GET /calendar/v3/calendars/primary/events` — timeMin/Max today, singleEvents, orderBy startTime.
+  - Filter: exclude cancelled events.
 
-- [ ] **Task 14.2: Fetch Task Lists & Tasks**
-  - Implementasi `fetchTaskLists(accessToken)` → `GET https://tasks.googleapis.com/tasks/v1/users/@me/lists`.
-  - Implementasi `fetchTasks(accessToken, taskListId)` → `GET https://tasks.googleapis.com/tasks/v1/lists/{taskListId}/tasks`.
-  - Filter: hanya task dengan `status != "completed"` (atau `hidden != true`).
-  - Return type: `GoogleTask[]` dengan id, title, notes, due, taskListId, taskListName.
+- [x] **Task 14.2: Fetch Task Lists & Tasks**
+  - `fetchTaskLists(accessToken)` → `GET /tasks/v1/users/@me/lists`.
+  - `fetchTasks(accessToken, taskListId)` → `GET /tasks/v1/lists/{id}/tasks` — hide completed & hidden.
+  - Return: `{ id, title }[]` untuk lists, `{ id, title, notes, due }[]` untuk tasks.
 
-- [ ] **Task 14.3: Define Google TypeScript Types**
-  - Buat `apps/tracker/app/types/google.ts`.
-  - `GoogleCalendarEvent`, `GoogleTask`, `TimerSource` enum.
+- [x] **Task 14.3: Define Google TypeScript Types**
+  - `apps/tracker/app/types/google.ts`: `GoogleCalendarEvent`, `GoogleTaskList`, `GoogleTask`, `TimerSource`.
 
 ## Phase 15: Database Schema Update (Source Tracking)
 
