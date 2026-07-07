@@ -2,67 +2,90 @@ services:
   db:
     image: postgres:15-alpine
     environment:
-      POSTGRES_USER: basetrack
-      POSTGRES_PASSWORD: password
-      POSTGRES_DB: basetrack
+      POSTGRES_USER: ${DB_USER:-basetrack}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-password}
+      POSTGRES_DB: ${DB_NAME:-basetrack}
     ports:
       - "5433:5432"
     volumes:
-      - ./postgres-data:/var/lib/postgresql/data
+      - postgres_data:/var/lib/postgresql/data
     networks:
       - tunnel_network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-basetrack} -d ${DB_NAME:-basetrack}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   tracker:
     image: basetrack-tracker:latest
     ports:
-      - "3000:3000"
-    env_file:
-      - apps/tracker/.env
+      - "${TRACKER_PORT:-3000}:3000"
     environment:
-      - DATABASE_URL=postgresql://basetrack:password@db:5432/basetrack?schema=public
-      - WS_INTERNAL_URL=http://ws:8081/internal/broadcast
+      NODE_ENV: production
+      PORT: "3000"
+      # Database
+      DATABASE_URL: postgresql://${DB_USER:-basetrack}:${DB_PASSWORD:-password}@db:5432/${DB_NAME:-basetrack}?schema=public
+      # Basecamp OAuth
+      BASECAMP_CLIENT_ID: ${BASECAMP_CLIENT_ID}
+      BASECAMP_CLIENT_SECRET: ${BASECAMP_CLIENT_SECRET}
+      BASECAMP_REDIRECT_URI: ${BASECAMP_REDIRECT_URI}
+      # Google OAuth
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
+      GOOGLE_REDIRECT_URI: ${GOOGLE_REDIRECT_URI}
+      # Session
+      SESSION_SECRET: ${SESSION_SECRET}
+      # WebSocket (internal + public)
+      WS_INTERNAL_URL: http://ws:8081/internal/broadcast
+      WS_PUBLIC_URL: ${WS_PUBLIC_URL:-ws://localhost:8081}
+      # Internal auth key for service-to-service
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY}
     depends_on:
-      - db
+      db:
+        condition: service_healthy
     networks:
       - tunnel_network
+    restart: unless-stopped
 
   cron:
     image: basetrack-cron:latest
-    env_file:
-      - apps/tracker/.env
     environment:
-      - DATABASE_URL=postgresql://basetrack:password@db:5432/basetrack?schema=public
-      - WS_INTERNAL_URL=http://ws:8081/internal/broadcast
+      NODE_ENV: production
+      DATABASE_URL: postgresql://${DB_USER:-basetrack}:${DB_PASSWORD:-password}@db:5432/${DB_NAME:-basetrack}?schema=public
+      WS_INTERNAL_URL: http://ws:8081/internal/broadcast
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY}
     depends_on:
-      - db
+      db:
+        condition: service_healthy
+      ws:
+        condition: service_started
     networks:
       - tunnel_network
+    restart: unless-stopped
 
   ws:
     image: basetrack-ws:latest
     ports:
-      - "8081:8081"
-    env_file:
-      - apps/tracker/.env
+      - "${WS_PORT:-8081}:8081"
     environment:
-      - DATABASE_URL=postgresql://basetrack:password@db:5432/basetrack?schema=public
+      NODE_ENV: production
+      PORT: "8081"
+      DATABASE_URL: postgresql://${DB_USER:-basetrack}:${DB_PASSWORD:-password}@db:5432/${DB_NAME:-basetrack}?schema=public
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY}
+      TRACKER_INTERNAL_URL: http://tracker:3000/api/internal/stop
     depends_on:
-      - db
+      db:
+        condition: service_healthy
     networks:
       - tunnel_network
-
-# Uncomment this section if you want to run cloudflared directly via docker-compose
-#  cloudflared:
-#    image: cloudflare/cloudflared:latest
-#    command: tunnel run
-#    environment:
-#      - TUNNEL_TOKEN=your_cloudflare_tunnel_token_here
-#    networks:
-#      - tunnel_network
-#    restart: always
+    restart: unless-stopped
 
 networks:
   tunnel_network:
     name: basetrack_tunnel_network
     driver: bridge
 
+volumes:
+  postgres_data:
