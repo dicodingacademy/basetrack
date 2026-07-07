@@ -37,9 +37,9 @@ jobs:
       - id: set-matrix
         run: |
           MATRIX="[]"
-          if [[ "${{ steps.filter.outputs.tracker }}" == "true" ]]; then MATRIX=$(echo $MATRIX | jq '. += ["tracker"]'); fi
-          if [[ "${{ steps.filter.outputs.cron }}" == "true" ]]; then MATRIX=$(echo $MATRIX | jq '. += ["cron"]'); fi
-          if [[ "${{ steps.filter.outputs.ws }}" == "true" ]]; then MATRIX=$(echo $MATRIX | jq '. += ["ws"]'); fi
+          if [[ "${{ steps.filter.outputs.tracker }}" == "true" ]]; then MATRIX=$(echo "$MATRIX" | jq -c '. + ["tracker"]'); fi
+          if [[ "${{ steps.filter.outputs.cron }}" == "true" ]]; then MATRIX=$(echo "$MATRIX" | jq -c '. + ["cron"]'); fi
+          if [[ "${{ steps.filter.outputs.ws }}" == "true" ]]; then MATRIX=$(echo "$MATRIX" | jq -c '. + ["ws"]'); fi
           echo "matrix=$MATRIX" >> $GITHUB_OUTPUT
 
   build-and-push:
