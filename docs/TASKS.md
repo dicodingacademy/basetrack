@@ -141,7 +141,7 @@ Berdasarkan `docs/PRD.md`, berikut adalah ekstraksi tugas (tasks) yang detail da
   - Tambah kolom `googleAccessToken String?`, `googleRefreshToken String?`, `googleTokenExpiresAt DateTime?` pada model `User`.
   - Migration: `20260706131251_add_google_tokens`.
 
-- [ ] **Task 13.2: Setup Google Cloud Console OAuth App**
+- [x] **Task 13.2: Setup Google Cloud Console OAuth App**
   - Buat OAuth 2.0 Web Application di Google Cloud Console.
   - Dapatkan `GOOGLE_CLIENT_ID` dan `GOOGLE_CLIENT_SECRET`.
   - Tambahkan `http://localhost:5173/auth/google/callback` ke Authorized Redirect URIs.
@@ -248,10 +248,147 @@ Berdasarkan `docs/PRD.md`, berikut adalah ekstraksi tugas (tasks) yang detail da
   - Intent `DISCONNECT_GOOGLE` di action `home.tsx` → `disconnectGoogle(userId)`.
   - Nullify token di DB + revoke via Google API.
 
-- [ ] **Task 18.4: Verifikasi End-to-End Flow**
+- [x] **Task 18.4: Verifikasi End-to-End Flow**
   - Login Basecamp → konek Google → lihat event hari ini & tasks → pilih project → start timer → stop → cek timesheet di Basecamp.
   - Test auto-switch: start Google item saat Basecamp timer berjalan → timer lama auto-stop.
   - Test auto-stop cron pada timer dari Google source.
+
+## Phase 19: Dynamic Auto-Stop Rules — Database Schema
+
+- [ ] **Task 19.1: Tambah Field `timezone` pada Model `User`**
+  - Tambah kolom `timezone String @default("Asia/Jakarta")` pada model `User` di `packages/db/prisma/schema.prisma`.
+  - Digunakan oleh cron untuk mengkonversi waktu UTC ke zona waktu user saat evaluasi kondisi `time_of_day` dan `day_of_week`.
+
+- [ ] **Task 19.2: Tambah Model `AutoStopRule`**
+  - Buat model `AutoStopRule` di `packages/db/prisma/schema.prisma` dengan struktur:
+    ```
+    id         String   @id @default(uuid())
+    userId     String
+    enabled    Boolean  @default(true)
+    name       String?
+    conditions Json     // [{ "type": "...", "operator": "...", "value": ... }, ...]
+    createdAt  DateTime @default(now())
+    updatedAt  DateTime @updatedAt
+    ```
+  - Relasi: `user User @relation(fields: [userId], references: [id], onDelete: Cascade)`.
+  - Index pada `userId`.
+
+- [ ] **Task 19.3: Migrasi Data dari Threshold Lama**
+  - Buat Prisma migration yang membaca nilai `autoStopThresholdHours` setiap user.
+  - Untuk setiap user, buat 1 default `AutoStopRule` dengan kondisi:
+    `[{ "type": "elapsed_hours", "operator": "gte", "value": <threshold_lama> }]`.
+  - Hapus kolom `autoStopThresholdHours` dari model `User`.
+
+- [ ] **Task 19.4: Update Enum `StopReason` (Verifikasi)**
+  - Enum `StopReason` sudah memiliki nilai `AUTO_STOPPED`. Verifikasi tidak ada perubahan tambahan yang diperlukan.
+
+## Phase 20: Dynamic Auto-Stop Rules — Service & Route
+
+- [ ] **Task 20.1: Buat Service `rules.server.ts`**
+  - File: `apps/tracker/app/services/rules.server.ts`.
+  - Fungsi:
+    - `getRules(userId)` → fetch semua rule milik user, ordered by `createdAt`.
+    - `saveRule(userId, id?, data)` → upsert rule (create jika `id` null, update jika `id` ada). Data: `{ name, enabled, conditions }`.
+    - `deleteRule(ruleId, userId)` → hapus rule, pastikan ownership via `userId`.
+    - `updateUserTimezone(userId, timezone)` → update `User.timezone`.
+
+- [ ] **Task 20.2: Tambah Intent Handlers di `home.tsx`**
+  - Intent `SAVE_RULE`:
+    - Parse `ruleId` (null untuk create, ada string untuk update).
+    - Parse `name` (string), `enabled` (boolean dari checkbox, default true).
+    - Parse `conditions` dari formData (sebagai JSON string, lalu `JSON.parse`).
+    - Panggil `saveRule(user.id, ruleId, { name, enabled, conditions })`.
+  - Intent `DELETE_RULE`:
+    - Parse `ruleId`.
+    - Panggil `deleteRule(ruleId, user.id)`.
+  - Intent `UPDATE_TIMEZONE`:
+    - Parse `timezone` dari formData (string seperti `"Asia/Jakarta"`).
+    - Panggil `updateUserTimezone(user.id, timezone)`.
+
+- [ ] **Task 20.3: Update Loader di `home.tsx`**
+  - Fetch `rules` via `getRules(user.id)`.
+  - Return `rules` dan `user.timezone` dalam loader response.
+  - Hapus return `user.autoStopThresholdHours`.
+
+## Phase 21: Dynamic Auto-Stop Rules — Cron Rewrite
+
+- [ ] **Task 21.1: Install Timezone Library di Cron**
+  - Install `luxon` di `apps/cron/package.json` untuk konversi timezone (alternatif: `date-fns-tz`).
+
+- [ ] **Task 21.2: Rewrite Evaluasi Auto-Stop**
+  - File: `apps/cron/index.js`.
+  - Logika baru menggantikan pengecekan sederhana `elapsedHours >= thresholdHours`:
+    1. Fetch `ActiveTimer` dengan include `user` (`timezone`) dan `user.rules` (filter `enabled: true`).
+    2. Konversi `now` (UTC) ke waktu lokal user menggunakan `luxon.DateTime.now().setZone(user.timezone)`.
+    3. Untuk setiap rule, evaluasi semua kondisi (AND logic):
+       - `elapsed_hours` / `gte`: hitung `elapsedMs` dari `timer.startedAt` ke `now`, konversi ke jam, bandingkan dengan `value`.
+       - `time_of_day` / `gte`: bandingkan `nowInUserTz` dalam format HH:MM dengan `value`.
+       - `time_of_day` / `lte`: bandingkan `nowInUserTz` dalam format HH:MM dengan `value`.
+       - `time_of_day` / `between`: cek apakah `nowInUserTz` dalam rentang `value[0]` - `value[1]`. Jika `value[0] > value[1]` (overnight range), kondisi true jika `now >= value[0]` ATAU `now <= value[1]`.
+       - `day_of_week` / `in`: cek apakah hari ini (0=Minggu, 1=Senin, ..., 6=Sabtu) termasuk dalam array `value`.
+    4. Jika semua kondisi dalam satu rule terpenuhi → auto-stop timer.
+    5. Jika tidak ada rule yang match, timer tetap berjalan.
+
+- [ ] **Task 21.3: Verifikasi Notifikasi WebSocket Tetap Jalan**
+  - Pastikan setelah rewrite, panggilan `notifyWebSocketServer` dengan event `TIMER_AUTO_STOPPED` tetap berfungsi.
+  - Tidak ada perubahan pada format event atau endpoint broadcast.
+
+## Phase 22: Dynamic Auto-Stop Rules — UI Rule Builder
+
+- [ ] **Task 22.1: Buat Komponen `ConditionRow.tsx`**
+  - File: `apps/tracker/app/components/home/ConditionRow.tsx`.
+  - Props: `condition`, `index`, `onChange`, `onRemove`.
+  - Render satu baris kondisi:
+    - Dropdown tipe kondisi (`elapsed_hours`, `time_of_day`, `day_of_week`).
+    - Dropdown operator (tergantung tipe: `gte`, `lte`, `between`, `in`).
+    - Input value (tergantung tipe+operator): number input, time input, atau multi-select hari.
+    - Tombol hapus (✕).
+
+- [ ] **Task 22.2: Buat Komponen `RuleCard.tsx`**
+  - File: `apps/tracker/app/components/home/RuleCard.tsx`.
+  - Props: `rule`, `onSave`, `onDelete`.
+  - Render satu kartu rule:
+    - Header: toggle enable/disable, input nama rule, tombol delete.
+    - Body: daftar `ConditionRow` untuk setiap kondisi.
+    - Footer: tombol `+ Add Condition`.
+  - State lokal untuk optimistic editing via `fetcher.submit` (intent `SAVE_RULE`).
+
+- [ ] **Task 22.3: Buat Komponen `RuleList.tsx`**
+  - File: `apps/tracker/app/components/home/RuleList.tsx`.
+  - Props: `rules`, `userTimezone`.
+  - Render daftar `RuleCard` + tombol "+ Add Rule" di atas.
+  - Rule baru dibuat dengan 1 kondisi default (`elapsed_hours >= 8`).
+
+- [ ] **Task 22.4: Update `SettingsModal.tsx`**
+  - Hapus input `autoStopThresholdHours` dan label terkait.
+  - Ganti props `defaultAutoStopHours` → `rules`, `userTimezone`.
+  - Tambah section "Auto-Stop Rules" yang merender `RuleList`.
+  - Kirim timezone browser saat dialog dibuka (deteksi `Intl.DateTimeFormat`).
+
+## Phase 23: Dynamic Auto-Stop Rules — Timezone Detection
+
+- [ ] **Task 23.1: Deteksi & Simpan Timezone Browser**
+  - Di `SettingsModal.tsx`, saat mount, baca `Intl.DateTimeFormat().resolvedOptions().timeZone`.
+  - Jika berbeda dengan `user.timezone` dari loader, kirim intent `UPDATE_TIMEZONE` via `fetcher.submit`.
+  - Gunakan `useFetcher` agar tidak trigger navigasi.
+
+## Phase 24: Dynamic Auto-Stop Rules — Cleanup
+
+- [ ] **Task 24.1: Hapus Referensi Threshold Lama**
+  - Hapus fungsi `updateUserSettings()` dari `apps/tracker/app/services/user.server.ts` jika tidak lagi digunakan untuk field lain.
+  - Hapus parsing `autoStopThresholdHours` di intent `UPDATE_SETTINGS` pada action `home.tsx`.
+
+- [ ] **Task 24.2: Evaluasi Intent `UPDATE_SETTINGS`**
+  - Jika intent `UPDATE_SETTINGS` sudah tidak punya tanggung jawab lain (semua diganti intent spesifik: `SAVE_RULE`, `DELETE_RULE`, `GENERATE_API_KEY`, `DISCONNECT_GOOGLE`, `UPDATE_TIMEZONE`), hapus intent tersebut.
+
+- [ ] **Task 24.3: Verifikasi End-to-End Dynamic Rules**
+  - Buat 2-3 rule dengan kombinasi kondisi berbeda.
+  - Start timer → tunggu cron detect → pastikan auto-stop terjadi sesuai rule yang match.
+  - Verifikasi rule overnight range bekerja (22:00-02:00).
+  - Verifikasi day filter bekerja (rule hanya aktif di hari tertentu).
+  - Verifikasi enable/disable rule (rule disabled tidak trigger auto-stop).
+  - Verifikasi edit rule langsung berefek di cron berikutnya.
+  - Verifikasi WebSocket notification `TIMER_AUTO_STOPPED` diterima UI dan trigger revalidate.
 
 ---
 *Catatan: Open questions dari PRD (seperti retry strategy detail atau endpoint assignment) dapat dievaluasi lebih dalam saat memasuki Phase 4 dan Phase 7.*
