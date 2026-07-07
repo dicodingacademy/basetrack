@@ -7,7 +7,7 @@ import { fetchAssignments, fetchProjectDetails, getValidAccessToken } from "../u
 import { getValidGoogleToken, fetchCalendarEvents, fetchTaskLists, fetchTasks } from "../utils/google.server";
 import { startTimer, stopTimer, getActiveTimer, getPendingApprovals, approveTimeEntry } from "../services/timer.server";
 import { generateNewApiKey } from "../services/user.server";
-import { getRules, saveRule, deleteRule, updateUserTimezone } from "../services/rules.server";
+import { getRules, saveRule, deleteRule, updateUserTimezone, replaceAllRules } from "../services/rules.server";
 import { disconnectGoogle } from "../utils/google.server";
 import { Button } from "../components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "../components/ui/card";
@@ -303,6 +303,30 @@ export async function action({ request }: Route.ActionArgs) {
     const ruleId = formData.get("ruleId") as string;
     if (!ruleId) return new Response("Rule ID required", { status: 400 });
     await deleteRule(ruleId, user.id);
+    return { success: true };
+  }
+
+  if (intent === "SAVE_ALL_RULES") {
+    const rulesStr = formData.get("rules") as string;
+    if (!rulesStr) return new Response("Missing rules", { status: 400 });
+
+    let rules;
+    try {
+      rules = JSON.parse(rulesStr);
+    } catch {
+      return new Response("Invalid JSON", { status: 400 });
+    }
+
+    if (!Array.isArray(rules)) return new Response("Expected array", { status: 400 });
+
+    await replaceAllRules(
+      user.id,
+      rules.map((r: any) => ({
+        name: r.name,
+        enabled: r.enabled !== false,
+        conditions: r.conditions,
+      }))
+    );
     return { success: true };
   }
 

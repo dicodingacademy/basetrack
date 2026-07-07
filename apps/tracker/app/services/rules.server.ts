@@ -43,6 +43,25 @@ export async function deleteRule(ruleId: string, userId: string) {
   });
 }
 
+export async function replaceAllRules(
+  userId: string,
+  rules: { name?: string; enabled: boolean; conditions: Prisma.InputJsonValue }[]
+) {
+  await prisma.$transaction([
+    prisma.autoStopRule.deleteMany({ where: { userId } }),
+    ...rules.map((r) =>
+      prisma.autoStopRule.create({
+        data: {
+          userId,
+          name: r.name,
+          enabled: r.enabled,
+          conditions: r.conditions,
+        },
+      })
+    ),
+  ]);
+}
+
 export async function updateUserTimezone(userId: string, timezone: string) {
   return prisma.user.update({
     where: { id: userId },
