@@ -1,29 +1,37 @@
-import { useFetcher } from "react-router";
 import { Button } from "../ui/button";
 import { RuleCard } from "./RuleCard";
 import { Plus } from "lucide-react";
-import type { AutoStopRuleData } from "./types";
+import type { AutoStopRuleData, Condition } from "./types";
+
+let tempIdCounter = 0;
+function generateTempId() {
+  return `_new_${++tempIdCounter}_${Date.now()}`;
+}
+
+const defaultRule = (): AutoStopRuleData => ({
+  id: "",
+  enabled: true,
+  name: "",
+  conditions: [{ type: "elapsed_hours" as const, operator: "gte" as const, value: 8 } as Condition],
+});
 
 type RuleListProps = {
   rules: AutoStopRuleData[];
+  onChange: (rules: AutoStopRuleData[]) => void;
 };
 
-export function RuleList({ rules }: RuleListProps) {
-  const fetcher = useFetcher();
-
+export function RuleList({ rules, onChange }: RuleListProps) {
   const handleAddRule = () => {
-    fetcher.submit(
-      {
-        intent: "SAVE_RULE",
-        ruleId: "",
-        name: "",
-        enabled: "true",
-        conditions: JSON.stringify([
-          { type: "elapsed_hours", operator: "gte", value: 8 },
-        ]),
-      },
-      { method: "post" }
-    );
+    onChange([...rules, { ...defaultRule(), id: generateTempId() }]);
+  };
+
+  const handleUpdateRule = (index: number, updated: AutoStopRuleData) => {
+    const newRules = rules.map((r, i) => (i === index ? updated : r));
+    onChange(newRules);
+  };
+
+  const handleDeleteRule = (index: number) => {
+    onChange(rules.filter((_, i) => i !== index));
   };
 
   return (
@@ -44,8 +52,13 @@ export function RuleList({ rules }: RuleListProps) {
         </p>
       ) : (
         <div className="space-y-2">
-          {rules.map((rule) => (
-            <RuleCard key={rule.id} rule={rule} />
+          {rules.map((rule, i) => (
+            <RuleCard
+              key={rule.id}
+              rule={rule}
+              onChange={(updated) => handleUpdateRule(i, updated)}
+              onDelete={() => handleDeleteRule(i)}
+            />
           ))}
         </div>
       )}

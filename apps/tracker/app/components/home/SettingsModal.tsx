@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Form, useFetcher } from "react-router";
+import { useFetcher } from "react-router";
 import { Button } from "../ui/button";
 import {
   Dialog,
@@ -23,25 +23,41 @@ type SettingsModalProps = {
   googleConnected?: boolean;
 };
 
-export function SettingsModal({ rules, userTimezone, apiKey, googleConnected }: SettingsModalProps) {
+export function SettingsModal({ rules: initialRules, userTimezone, apiKey, googleConnected }: SettingsModalProps) {
   const [open, setOpen] = useState(false);
   const fetcher = useFetcher();
+  const [localRules, setLocalRules] = useState<AutoStopRuleData[]>(initialRules);
+  const isSaving = fetcher.state !== "idle";
 
   useEffect(() => {
     if (open) {
+      setLocalRules([...initialRules]);
       const detected = Intl.DateTimeFormat().resolvedOptions().timeZone;
       if (detected && detected !== userTimezone) {
-        fetcher.submit(
-          { intent: "UPDATE_TIMEZONE", timezone: detected },
-          { method: "post" }
-        );
+        fetcher.submit({ intent: "UPDATE_TIMEZONE", timezone: detected }, { method: "post" });
       }
     }
   }, [open]);
 
+  const handleSave = () => {
+    const payload = localRules.map((r) => ({
+      name: r.name || "",
+      enabled: r.enabled,
+      conditions: r.conditions,
+    }));
+    fetcher.submit(
+      {
+        intent: "SAVE_ALL_RULES",
+        rules: JSON.stringify(payload),
+      },
+      { method: "post" }
+    );
+    setOpen(false);
+  };
+
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger 
+      <DialogTrigger
         render={
           <Button variant="ghost" size="icon" className="h-8 w-8 text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100">
             <Settings className="h-4 w-4" />
@@ -49,16 +65,16 @@ export function SettingsModal({ rules, userTimezone, apiKey, googleConnected }: 
           </Button>
         }
       />
-      <DialogContent className="sm:max-w-[500px] max-h-[85vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-[560px] max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Tracker Settings</DialogTitle>
           <DialogDescription>
-            Configure auto-stop rules and integrations. Changes save automatically.
+            Configure auto-stop rules and integrations.
           </DialogDescription>
         </DialogHeader>
         <div className="grid gap-6 py-4">
           <div>
-            <RuleList rules={rules} />
+            <RuleList rules={localRules} onChange={setLocalRules} />
           </div>
 
           <div className="border-t pt-4">
@@ -67,16 +83,16 @@ export function SettingsModal({ rules, userTimezone, apiKey, googleConnected }: 
               <div className="grid gap-2">
                 <Label htmlFor="apiKey">Personal API Key</Label>
                 <div className="flex gap-2">
-                  <Input 
-                    id="apiKey" 
-                    readOnly 
-                    value={apiKey || "No key generated yet"} 
+                  <Input
+                    id="apiKey"
+                    readOnly
+                    value={apiKey || "No key generated yet"}
                     className="font-mono text-xs bg-zinc-50 dark:bg-zinc-900"
                   />
                   {apiKey && (
-                    <Button 
-                      type="button" 
-                      variant="outline" 
+                    <Button
+                      type="button"
+                      variant="outline"
                       onClick={() => {
                         navigator.clipboard.writeText(apiKey);
                         alert("API Key copied to clipboard!");
@@ -88,9 +104,9 @@ export function SettingsModal({ rules, userTimezone, apiKey, googleConnected }: 
                 </div>
               </div>
               <div className="flex justify-start">
-                <Button 
-                  type="button" 
-                  variant="secondary" 
+                <Button
+                  type="button"
+                  variant="secondary"
                   size="sm"
                   disabled={fetcher.state !== "idle"}
                   onClick={() => {
@@ -133,12 +149,7 @@ export function SettingsModal({ rules, userTimezone, apiKey, googleConnected }: 
                 {googleConnected ? (
                   <fetcher.Form method="post">
                     <input type="hidden" name="intent" value="DISCONNECT_GOOGLE" />
-                    <Button
-                      type="submit"
-                      variant="outline"
-                      size="sm"
-                      disabled={fetcher.state !== "idle"}
-                    >
+                    <Button type="submit" variant="outline" size="sm" disabled={fetcher.state !== "idle"}>
                       {fetcher.state !== "idle" ? (
                         <>
                           <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -154,9 +165,7 @@ export function SettingsModal({ rules, userTimezone, apiKey, googleConnected }: 
                     type="button"
                     variant="secondary"
                     size="sm"
-                    onClick={() => {
-                      window.location.href = "/auth/google";
-                    }}
+                    onClick={() => { window.location.href = "/auth/google"; }}
                   >
                     Connect Google Account
                   </Button>
@@ -165,6 +174,21 @@ export function SettingsModal({ rules, userTimezone, apiKey, googleConnected }: 
             </div>
           </div>
         </div>
+        <DialogFooter>
+          <Button type="button" variant="outline" onClick={() => setOpen(false)} disabled={isSaving}>
+            Cancel
+          </Button>
+          <Button type="button" onClick={handleSave} disabled={isSaving}>
+            {isSaving ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Saving...
+              </>
+            ) : (
+              "Save Changes"
+            )}
+          </Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );
