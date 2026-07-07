@@ -255,11 +255,11 @@ Berdasarkan `docs/PRD.md`, berikut adalah ekstraksi tugas (tasks) yang detail da
 
 ## Phase 19: Dynamic Auto-Stop Rules — Database Schema
 
-- [ ] **Task 19.1: Tambah Field `timezone` pada Model `User`**
+- [x] **Task 19.1: Tambah Field `timezone` pada Model `User`**
   - Tambah kolom `timezone String @default("Asia/Jakarta")` pada model `User` di `packages/db/prisma/schema.prisma`.
   - Digunakan oleh cron untuk mengkonversi waktu UTC ke zona waktu user saat evaluasi kondisi `time_of_day` dan `day_of_week`.
 
-- [ ] **Task 19.2: Tambah Model `AutoStopRule`**
+- [x] **Task 19.2: Tambah Model `AutoStopRule`**
   - Buat model `AutoStopRule` di `packages/db/prisma/schema.prisma` dengan struktur:
     ```
     id         String   @id @default(uuid())
@@ -273,13 +273,13 @@ Berdasarkan `docs/PRD.md`, berikut adalah ekstraksi tugas (tasks) yang detail da
   - Relasi: `user User @relation(fields: [userId], references: [id], onDelete: Cascade)`.
   - Index pada `userId`.
 
-- [ ] **Task 19.3: Migrasi Data dari Threshold Lama**
+- [x] **Task 19.3: Migrasi Data dari Threshold Lama**
   - Buat Prisma migration yang membaca nilai `autoStopThresholdHours` setiap user.
   - Untuk setiap user, buat 1 default `AutoStopRule` dengan kondisi:
     `[{ "type": "elapsed_hours", "operator": "gte", "value": <threshold_lama> }]`.
   - Hapus kolom `autoStopThresholdHours` dari model `User`.
 
-- [ ] **Task 19.4: Update Enum `StopReason` (Verifikasi)**
+- [x] **Task 19.4: Update Enum `StopReason` (Verifikasi)**
   - Enum `StopReason` sudah memiliki nilai `AUTO_STOPPED`. Verifikasi tidak ada perubahan tambahan yang diperlukan.
 
 ## Phase 20: Dynamic Auto-Stop Rules — Service & Route
