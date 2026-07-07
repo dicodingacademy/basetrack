@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "node-cron": "^3.0.3",
+    "luxon": "^3.6.1",
     "@basetrack/db": "*"
   },
   "devDependencies": {

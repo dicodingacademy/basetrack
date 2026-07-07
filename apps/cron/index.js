@@ -1,5 +1,6 @@
 import cron from "node-cron";
 import { PrismaClient } from "@prisma/client";
+import { DateTime } from "luxon";
 
 const prisma = new PrismaClient();
 
@@ -21,28 +22,107 @@ async function notifyWebSocketServer(userId, event) {
   }
 }
 
+function evaluateCondition(condition, elapsedHours, nowInUserTz) {
+  const { type, operator, value } = condition;
+
+  switch (type) {
+    case "elapsed_hours": {
+      if (operator === "gte") return elapsedHours >= value;
+      break;
+    }
+
+    case "time_of_day": {
+      const currentHour = nowInUserTz.hour;
+      const currentMinute = nowInUserTz.minute;
+      const currentMinutes = currentHour * 60 + currentMinute;
+
+      if (operator === "gte") {
+        const [h, m] = value.split(":").map(Number);
+        return currentMinutes >= h * 60 + m;
+      }
+      if (operator === "lte") {
+        const [h, m] = value.split(":").map(Number);
+        return currentMinutes <= h * 60 + m;
+      }
+      if (operator === "between") {
+        const [fromStr, toStr] = value;
+        const [fromH, fromM] = fromStr.split(":").map(Number);
+        const [toH, toM] = toStr.split(":").map(Number);
+        const fromMinutes = fromH * 60 + fromM;
+        const toMinutes = toH * 60 + toM;
+
+        if (fromMinutes <= toMinutes) {
+          return currentMinutes >= fromMinutes && currentMinutes <= toMinutes;
+        }
+        // overnight range
+        return currentMinutes >= fromMinutes || currentMinutes <= toMinutes;
+      }
+      break;
+    }
+
+    case "day_of_week": {
+      if (operator === "in") {
+        return value.includes(nowInUserTz.weekday % 7); // Luxon: 1=Mon..7=Sun → 0=Sun..6=Sat
+      }
+      break;
+    }
+  }
+
+  return false;
+}
+
 console.log("Cron service starting...");
 
-// Run every minute
 cron.schedule("* * * * *", async () => {
   console.log(`[${new Date().toISOString()}] Running auto-stop check...`);
   try {
     const activeTimers = await prisma.activeTimer.findMany({
       include: {
-        user: true,
+        user: {
+          include: {
+            rules: {
+              where: { enabled: true },
+            },
+          },
+        },
       },
     });
 
     const now = new Date();
 
     for (const timer of activeTimers) {
-      const thresholdHours = timer.user.autoStopThresholdHours;
+      const { user } = timer;
+      const rules = user.rules;
+
+      if (rules.length === 0) continue;
+
+      const nowInUserTz = DateTime.now().setZone(user.timezone || "Asia/Jakarta");
       const elapsedMs = now.getTime() - timer.startedAt.getTime();
       const elapsedHours = elapsedMs / (1000 * 60 * 60);
 
-      if (elapsedHours >= thresholdHours) {
-        console.log(`Stopping timer for user ${timer.userId} (exceeded ${thresholdHours}h limit). Elapsed: ${elapsedHours.toFixed(2)}h`);
-        
+      let shouldStop = false;
+      let matchedRule = null;
+
+      for (const rule of rules) {
+        const conditions = rule.conditions;
+        if (!Array.isArray(conditions) || conditions.length === 0) continue;
+
+        const allMatch = conditions.every((c) =>
+          evaluateCondition(c, elapsedHours, nowInUserTz)
+        );
+
+        if (allMatch) {
+          shouldStop = true;
+          matchedRule = rule;
+          break;
+        }
+      }
+
+      if (shouldStop) {
+        console.log(
+          `Stopping timer for user ${timer.userId} (matched rule "${matchedRule.name || matchedRule.id}"). Elapsed: ${elapsedHours.toFixed(2)}h`
+        );
+
         await prisma.$transaction([
           prisma.timeEntry.create({
             data: {
@@ -63,7 +143,7 @@ cron.schedule("* * * * *", async () => {
             where: { id: timer.id },
           }),
         ]);
-        
+
         await notifyWebSocketServer(timer.userId, { type: "TIMER_AUTO_STOPPED" });
       }
     }
@@ -72,7 +152,6 @@ cron.schedule("* * * * *", async () => {
   }
 });
 
-// Keep process alive
 process.on("SIGINT", async () => {
   console.log("Shutting down cron service...");
   await prisma.$disconnect();
