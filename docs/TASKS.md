@@ -312,10 +312,10 @@ Berdasarkan `docs/PRD.md`, berikut adalah ekstraksi tugas (tasks) yang detail da
 
 ## Phase 21: Dynamic Auto-Stop Rules — Cron Rewrite
 
-- [ ] **Task 21.1: Install Timezone Library di Cron**
+- [x] **Task 21.1: Install Timezone Library di Cron**
   - Install `luxon` di `apps/cron/package.json` untuk konversi timezone (alternatif: `date-fns-tz`).
 
-- [ ] **Task 21.2: Rewrite Evaluasi Auto-Stop**
+- [x] **Task 21.2: Rewrite Evaluasi Auto-Stop**
   - File: `apps/cron/index.js`.
   - Logika baru menggantikan pengecekan sederhana `elapsedHours >= thresholdHours`:
     1. Fetch `ActiveTimer` dengan include `user` (`timezone`) dan `user.rules` (filter `enabled: true`).
@@ -329,13 +329,13 @@ Berdasarkan `docs/PRD.md`, berikut adalah ekstraksi tugas (tasks) yang detail da
     4. Jika semua kondisi dalam satu rule terpenuhi → auto-stop timer.
     5. Jika tidak ada rule yang match, timer tetap berjalan.
 
-- [ ] **Task 21.3: Verifikasi Notifikasi WebSocket Tetap Jalan**
+- [x] **Task 21.3: Verifikasi Notifikasi WebSocket Tetap Jalan**
   - Pastikan setelah rewrite, panggilan `notifyWebSocketServer` dengan event `TIMER_AUTO_STOPPED` tetap berfungsi.
   - Tidak ada perubahan pada format event atau endpoint broadcast.
 
 ## Phase 22: Dynamic Auto-Stop Rules — UI Rule Builder
 
-- [ ] **Task 22.1: Buat Komponen `ConditionRow.tsx`**
+- [x] **Task 22.1: Buat Komponen `ConditionRow.tsx`**
   - File: `apps/tracker/app/components/home/ConditionRow.tsx`.
   - Props: `condition`, `index`, `onChange`, `onRemove`.
   - Render satu baris kondisi:
@@ -344,7 +344,7 @@ Berdasarkan `docs/PRD.md`, berikut adalah ekstraksi tugas (tasks) yang detail da
     - Input value (tergantung tipe+operator): number input, time input, atau multi-select hari.
     - Tombol hapus (✕).
 
-- [ ] **Task 22.2: Buat Komponen `RuleCard.tsx`**
+- [x] **Task 22.2: Buat Komponen `RuleCard.tsx`**
   - File: `apps/tracker/app/components/home/RuleCard.tsx`.
   - Props: `rule`, `onSave`, `onDelete`.
   - Render satu kartu rule:
@@ -353,13 +353,13 @@ Berdasarkan `docs/PRD.md`, berikut adalah ekstraksi tugas (tasks) yang detail da
     - Footer: tombol `+ Add Condition`.
   - State lokal untuk optimistic editing via `fetcher.submit` (intent `SAVE_RULE`).
 
-- [ ] **Task 22.3: Buat Komponen `RuleList.tsx`**
+- [x] **Task 22.3: Buat Komponen `RuleList.tsx`**
   - File: `apps/tracker/app/components/home/RuleList.tsx`.
   - Props: `rules`, `userTimezone`.
   - Render daftar `RuleCard` + tombol "+ Add Rule" di atas.
   - Rule baru dibuat dengan 1 kondisi default (`elapsed_hours >= 8`).
 
-- [ ] **Task 22.4: Update `SettingsModal.tsx`**
+- [x] **Task 22.4: Update `SettingsModal.tsx`**
   - Hapus input `autoStopThresholdHours` dan label terkait.
   - Ganti props `defaultAutoStopHours` → `rules`, `userTimezone`.
   - Tambah section "Auto-Stop Rules" yang merender `RuleList`.
@@ -367,18 +367,18 @@ Berdasarkan `docs/PRD.md`, berikut adalah ekstraksi tugas (tasks) yang detail da
 
 ## Phase 23: Dynamic Auto-Stop Rules — Timezone Detection
 
-- [ ] **Task 23.1: Deteksi & Simpan Timezone Browser**
+- [x] **Task 23.1: Deteksi & Simpan Timezone Browser**
   - Di `SettingsModal.tsx`, saat mount, baca `Intl.DateTimeFormat().resolvedOptions().timeZone`.
   - Jika berbeda dengan `user.timezone` dari loader, kirim intent `UPDATE_TIMEZONE` via `fetcher.submit`.
   - Gunakan `useFetcher` agar tidak trigger navigasi.
 
 ## Phase 24: Dynamic Auto-Stop Rules — Cleanup
 
-- [ ] **Task 24.1: Hapus Referensi Threshold Lama**
+- [x] **Task 24.1: Hapus Referensi Threshold Lama**
   - Hapus fungsi `updateUserSettings()` dari `apps/tracker/app/services/user.server.ts` jika tidak lagi digunakan untuk field lain.
   - Hapus parsing `autoStopThresholdHours` di intent `UPDATE_SETTINGS` pada action `home.tsx`.
 
-- [ ] **Task 24.2: Evaluasi Intent `UPDATE_SETTINGS`**
+- [x] **Task 24.2: Evaluasi Intent `UPDATE_SETTINGS`**
   - Jika intent `UPDATE_SETTINGS` sudah tidak punya tanggung jawab lain (semua diganti intent spesifik: `SAVE_RULE`, `DELETE_RULE`, `GENERATE_API_KEY`, `DISCONNECT_GOOGLE`, `UPDATE_TIMEZONE`), hapus intent tersebut.
 
 - [ ] **Task 24.3: Verifikasi End-to-End Dynamic Rules**
