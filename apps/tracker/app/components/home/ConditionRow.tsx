@@ -130,7 +130,7 @@ export function ConditionRow({ condition, onChange, onRemove, index }: Condition
   };
 
   return (
-    <div className="flex items-center gap-2 px-2 py-1.5 rounded-md bg-zinc-50 dark:bg-zinc-900/50 border">
+    <div className="flex flex-wrap items-center gap-2 px-2 py-1.5 rounded-md bg-zinc-50 dark:bg-zinc-900/50 border">
       <select
         value={condition.type}
         onChange={(e) => handleTypeChange(e.target.value as Condition["type"])}
