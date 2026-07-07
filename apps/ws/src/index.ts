@@ -95,7 +95,7 @@ wss.on("connection", (ws) => {
                 "Content-Type": "application/json",
                 "x-internal-key": internalKey,
               },
-              body: JSON.stringify({ userId: user.id, basecampId: user.basecampId }),
+              body: JSON.stringify({ userId: user.id, basecampId: user.basecampAccountId }),
             });
           } catch (err) {
             console.error("Failed to call internal stop API:", err);

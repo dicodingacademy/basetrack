@@ -64,7 +64,7 @@ async function loadData(user: any): Promise<AppData> {
 
   try {
     const accessToken = await getValidAccessToken(user.id);
-    const rawAssignments = await fetchAssignments(user.basecampId, accessToken);
+    const rawAssignments = await fetchAssignments(user.basecampAccountId, accessToken);
 
     let items = [];
     if (Array.isArray(rawAssignments)) {
@@ -74,7 +74,7 @@ async function loadData(user: any): Promise<AppData> {
     }
 
     const uniqueBucketIds = Array.from(new Set(items.map((i: BasecampAssignment) => i.bucket?.id?.toString()).filter(Boolean))) as string[];
-    rawProjects = await fetchProjectDetails(user.basecampId, uniqueBucketIds, accessToken);
+    rawProjects = await fetchProjectDetails(user.basecampAccountId, uniqueBucketIds, accessToken);
 
     const timesheetEnabledProjectIds = new Set(
       rawProjects
@@ -256,7 +256,7 @@ export async function action({ request }: Route.ActionArgs) {
   }
 
   if (intent === "STOP_TIMER") {
-    return await stopTimer(user.id, user.basecampId);
+    return await stopTimer(user.id, user.basecampAccountId);
   }
 
   if (intent === "APPROVE_TIMER") {
@@ -266,7 +266,7 @@ export async function action({ request }: Route.ActionArgs) {
       return new Response("Invalid data", { status: 400 });
     }
 
-    return await approveTimeEntry(user.id, entryId, user.basecampId, Math.floor(durationHours * 3600));
+    return await approveTimeEntry(user.id, entryId, user.basecampAccountId, Math.floor(durationHours * 3600));
   }
 
   if (intent === "SAVE_RULE") {
