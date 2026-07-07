@@ -6,7 +6,8 @@ import { getSession, getUserFromSessionId } from "../utils/session.server";
 import { fetchAssignments, fetchProjectDetails, getValidAccessToken } from "../utils/basecamp.server";
 import { getValidGoogleToken, fetchCalendarEvents, fetchTaskLists, fetchTasks } from "../utils/google.server";
 import { startTimer, stopTimer, getActiveTimer, getPendingApprovals, approveTimeEntry } from "../services/timer.server";
-import { updateUserSettings, generateNewApiKey } from "../services/user.server";
+import { generateNewApiKey } from "../services/user.server";
+import { getRules, saveRule, deleteRule, updateUserTimezone } from "../services/rules.server";
 import { disconnectGoogle } from "../utils/google.server";
 import { Button } from "../components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "../components/ui/card";
@@ -40,6 +41,7 @@ import { SettingsModal } from "../components/home/SettingsModal";
 import { Clock, Briefcase, LayoutDashboard, CheckCircle2, ArrowRight, LogOut, ListTodo, Calendar } from "lucide-react";
 import type { BasecampAssignment, BasecampProject, GroupedAssignment, GroupedTask } from "../types/basecamp";
 import type { GoogleCalendarEvent, GoogleTask, TimerSource } from "../types/google";
+import type { Condition } from "../components/home/types";
 
 type AppData = {
   groupedAssignments: GroupedAssignment[];
@@ -201,17 +203,22 @@ export async function loader({ request }: Route.LoaderArgs) {
   }
 
   const activeTimer = await getActiveTimer(user.id);
+  const rules = (await getRules(user.id)).map((r) => ({
+    ...r,
+    conditions: r.conditions as unknown as Condition[],
+  }));
 
   return {
     user: {
       id: user.id,
       name: user.name,
       email: user.email,
-      autoStopThresholdHours: user.autoStopThresholdHours,
+      timezone: user.timezone,
       apiKey: user.apiKey,
     },
     googleConnected: !!user.googleAccessToken,
     activeTimer,
+    rules,
     wsUrl: process.env.WS_PUBLIC_URL || "ws://localhost:8081",
     data: loadData(user),
   };
@@ -262,13 +269,47 @@ export async function action({ request }: Route.ActionArgs) {
     return await approveTimeEntry(user.id, entryId, user.basecampId, Math.floor(durationHours * 3600));
   }
 
-  if (intent === "UPDATE_SETTINGS") {
-    const autoStopThresholdHours = parseInt(formData.get("autoStopThresholdHours") as string, 10);
-    if (isNaN(autoStopThresholdHours) || autoStopThresholdHours < 1) {
-      return new Response("Invalid value", { status: 400 });
+  if (intent === "SAVE_RULE") {
+    const ruleId = formData.get("ruleId") as string;
+    const name = formData.get("name") as string;
+    const enabled = formData.get("enabled") === "true";
+    const conditionsStr = formData.get("conditions") as string;
+
+    if (!conditionsStr) {
+      return new Response("Missing conditions", { status: 400 });
     }
 
-    await updateUserSettings(user.id, autoStopThresholdHours);
+    let conditions;
+    try {
+      conditions = JSON.parse(conditionsStr);
+    } catch {
+      return new Response("Invalid conditions JSON", { status: 400 });
+    }
+
+    if (!Array.isArray(conditions) || conditions.length === 0) {
+      return new Response("At least one condition required", { status: 400 });
+    }
+
+    await saveRule(user.id, {
+      id: ruleId || undefined,
+      name: name || undefined,
+      enabled,
+      conditions,
+    });
+    return { success: true };
+  }
+
+  if (intent === "DELETE_RULE") {
+    const ruleId = formData.get("ruleId") as string;
+    if (!ruleId) return new Response("Rule ID required", { status: 400 });
+    await deleteRule(ruleId, user.id);
+    return { success: true };
+  }
+
+  if (intent === "UPDATE_TIMEZONE") {
+    const timezone = formData.get("timezone") as string;
+    if (!timezone) return new Response("Timezone required", { status: 400 });
+    await updateUserTimezone(user.id, timezone);
     return { success: true };
   }
 
@@ -286,7 +327,7 @@ export async function action({ request }: Route.ActionArgs) {
 }
 
 export default function Home({ loaderData }: Route.ComponentProps) {
-  const { user, activeTimer: serverActiveTimer, wsUrl, googleConnected } = loaderData;
+  const { user, activeTimer: serverActiveTimer, wsUrl, googleConnected, rules } = loaderData;
   const navigation = useNavigation();
 
   let activeTimer = serverActiveTimer;
@@ -418,7 +459,8 @@ export default function Home({ loaderData }: Route.ComponentProps) {
                 </div>
                 <div onClick={(e) => e.stopPropagation()} className="flex items-center gap-1">
                   <SettingsModal
-                    defaultAutoStopHours={user.autoStopThresholdHours ?? 8}
+                    rules={rules}
+                    userTimezone={user.timezone ?? "Asia/Jakarta"}
                     apiKey={user.apiKey}
                     googleConnected={googleConnected}
                   />

@@ -1,12 +1,5 @@
 import { prisma } from "../utils/db.server";
 
-export async function updateUserSettings(userId: string, autoStopThresholdHours: number) {
-  return await prisma.user.update({
-    where: { id: userId },
-    data: { autoStopThresholdHours }
-  });
-}
-
 export async function generateNewApiKey(userId: string) {
   const newApiKey = crypto.randomUUID();
   const user = await prisma.user.update({
