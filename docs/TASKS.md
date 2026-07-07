@@ -284,7 +284,7 @@ Berdasarkan `docs/PRD.md`, berikut adalah ekstraksi tugas (tasks) yang detail da
 
 ## Phase 20: Dynamic Auto-Stop Rules — Service & Route
 
-- [ ] **Task 20.1: Buat Service `rules.server.ts`**
+- [x] **Task 20.1: Buat Service `rules.server.ts`**
   - File: `apps/tracker/app/services/rules.server.ts`.
   - Fungsi:
     - `getRules(userId)` → fetch semua rule milik user, ordered by `createdAt`.
@@ -292,7 +292,7 @@ Berdasarkan `docs/PRD.md`, berikut adalah ekstraksi tugas (tasks) yang detail da
     - `deleteRule(ruleId, userId)` → hapus rule, pastikan ownership via `userId`.
     - `updateUserTimezone(userId, timezone)` → update `User.timezone`.
 
-- [ ] **Task 20.2: Tambah Intent Handlers di `home.tsx`**
+- [x] **Task 20.2: Tambah Intent Handlers di `home.tsx`**
   - Intent `SAVE_RULE`:
     - Parse `ruleId` (null untuk create, ada string untuk update).
     - Parse `name` (string), `enabled` (boolean dari checkbox, default true).
@@ -305,7 +305,7 @@ Berdasarkan `docs/PRD.md`, berikut adalah ekstraksi tugas (tasks) yang detail da
     - Parse `timezone` dari formData (string seperti `"Asia/Jakarta"`).
     - Panggil `updateUserTimezone(user.id, timezone)`.
 
-- [ ] **Task 20.3: Update Loader di `home.tsx`**
+- [x] **Task 20.3: Update Loader di `home.tsx`**
   - Fetch `rules` via `getRules(user.id)`.
   - Return `rules` dan `user.timezone` dalam loader response.
   - Hapus return `user.autoStopThresholdHours`.
