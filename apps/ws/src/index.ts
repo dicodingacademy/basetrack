@@ -172,5 +172,5 @@ app.post("/internal/kick", (req, res) => {
 
 const PORT = process.env.PORT || 8081;
 server.listen(Number(PORT), () => {
-  console.log(`WebSocket server running on port ${PORT}`);
+  console.log(`WebSocket server running on port ${PORT} [${new Date().toISOString()}]`);
 });

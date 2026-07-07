@@ -71,7 +71,7 @@ function evaluateCondition(condition, elapsedHours, nowInUserTz) {
   return false;
 }
 
-console.log("Cron service starting...");
+console.log(`Cron service starting [${new Date().toISOString()}]`);
 
 cron.schedule("* * * * *", async () => {
   console.log(`[${new Date().toISOString()}] Running auto-stop check...`);
