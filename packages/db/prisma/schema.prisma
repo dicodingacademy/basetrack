@@ -26,7 +26,8 @@ model User {
   sessions               Session[]
   timeEntries            TimeEntry[]
   activeTimer            ActiveTimer?
-  autoStopThresholdHours Int          @default(8)
+  rules                  AutoStopRule[]
+  timezone               String       @default("Asia/Jakarta")
   apiKey                 String?      @unique
   googleAccessToken      String?
   googleRefreshToken     String?
@@ -52,6 +53,19 @@ model ActiveTimer {
   startedAt   DateTime @default(now())
   lastPingAt  DateTime @default(now())
   source      String    @default("BASECAMP")
+}
+
+model AutoStopRule {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  enabled    Boolean  @default(true)
+  name       String?
+  conditions Json
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([userId])
 }
 
 model TimeEntry {
