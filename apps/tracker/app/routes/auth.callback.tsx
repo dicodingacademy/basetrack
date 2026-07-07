@@ -26,7 +26,6 @@ export async function loader({ request }: Route.LoaderArgs) {
     const tokenData = await exchangeCodeForTokens(code);
     const authData = await getLaunchpadAuthorization(tokenData.access_token);
 
-    // Temukan account bc3 (Basecamp 3/4)
     const bc3Account = authData.accounts.find((acc) => acc.product === "bc3");
     if (!bc3Account) {
       return new Response("No Basecamp account found", { status: 400 });
@@ -34,12 +33,12 @@ export async function loader({ request }: Route.LoaderArgs) {
 
     const { identity } = authData;
 
-    // Upsert user di database
     const tokenExpiresAt = new Date(Date.now() + tokenData.expires_in * 1000);
     const user = await prisma.user.upsert({
-      where: { basecampId: bc3Account.id.toString() },
+      where: { basecampId: identity.id.toString() },
       create: {
-        basecampId: bc3Account.id.toString(),
+        basecampId: identity.id.toString(),
+        basecampAccountId: bc3Account.id.toString(),
         name: `${identity.first_name} ${identity.last_name}`.trim(),
         email: identity.email_address,
         accessToken: tokenData.access_token,
@@ -47,6 +46,7 @@ export async function loader({ request }: Route.LoaderArgs) {
         tokenExpiresAt,
       },
       update: {
+        basecampAccountId: bc3Account.id.toString(),
         name: `${identity.first_name} ${identity.last_name}`.trim(),
         email: identity.email_address,
         accessToken: tokenData.access_token,
@@ -55,7 +55,8 @@ export async function loader({ request }: Route.LoaderArgs) {
       },
     });
 
-    // Buat session baru (expired dalam 30 hari untuk cookie, meski token basecamp expire lebih cepat)
+    await prisma.session.deleteMany({ where: { userId: user.id } });
+
     const expiresAt = new Date(Date.now() + 1000 * 60 * 60 * 24 * 30);
     const dbSession = await prisma.session.create({
       data: {
@@ -64,8 +65,6 @@ export async function loader({ request }: Route.LoaderArgs) {
       },
     });
 
-    // Simpan session id ke cookie
-    const cookieSession = await getSession(request.headers.get("Cookie"));
     cookieSession.set("sessionId", dbSession.id);
 
     return redirect("/", {
