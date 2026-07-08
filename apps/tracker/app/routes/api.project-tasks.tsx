@@ -16,12 +16,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const accessToken = await getValidAccessToken(user.id);
   const rawAssignments = await fetchAssignments(user.basecampAccountId, accessToken);
 
-  let items: BasecampAssignment[] = [];
-  if (Array.isArray(rawAssignments)) {
-    items = rawAssignments;
-  } else {
-    items = [...(rawAssignments.priorities || []), ...(rawAssignments.non_priorities || [])];
-  }
+  const items: BasecampAssignment[] = rawAssignments;
 
   const tasks = items
     .filter((a) =>

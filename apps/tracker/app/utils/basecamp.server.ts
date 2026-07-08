@@ -111,19 +111,34 @@ export async function getValidAccessToken(userId: string) {
 }
 
 export async function fetchAssignments(accountId: string, accessToken: string) {
-  const response = await fetch(`https://3.basecampapi.com/${accountId}/my/assignments.json`, {
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      "User-Agent": "BaseTrack (app@basetrack.local)",
-    },
-  });
+  const all: any[] = [];
+  let url: string | null = `https://3.basecampapi.com/${accountId}/my/assignments.json`;
 
-  if (!response.ok) {
-    const err = await response.text();
-    throw new Error(`Failed to fetch assignments: ${err}`);
+  while (url) {
+    const res: Response = await fetch(url, {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "User-Agent": "BaseTrack (app@basetrack.local)",
+      },
+    });
+
+    if (!res.ok) {
+      const err = await res.text();
+      throw new Error(`Failed to fetch assignments: ${err}`);
+    }
+
+    const page: any = await res.json();
+    const items: any[] = Array.isArray(page)
+      ? page
+      : [...(page.priorities ?? []), ...(page.non_priorities ?? [])];
+    all.push(...items);
+
+    const linkHeader: string | null = res.headers.get("Link");
+    const next: string | null = linkHeader?.match(/<([^>]+)>;\s*rel="next"/)?.[1] ?? null;
+    url = next;
   }
 
-  return response.json();
+  return all;
 }
 
 export async function fetchProjectDetails(accountId: string, bucketIds: string[], accessToken: string) {
