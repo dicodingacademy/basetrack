@@ -1,4 +1,5 @@
 import { redirect } from "react-router";
+import { randomUUID } from "node:crypto";
 import type { Route } from "./+types/auth.callback";
 import { exchangeCodeForTokens, getLaunchpadAuthorization } from "../utils/basecamp.server";
 import { prisma } from "../utils/db.server";
@@ -54,6 +55,14 @@ export async function loader({ request }: Route.LoaderArgs) {
         tokenExpiresAt,
       },
     });
+
+    // Ensure user has an API key for WebSocket authentication
+    if (!user.apiKey) {
+      await prisma.user.update({
+        where: { id: user.id },
+        data: { apiKey: randomUUID() },
+      });
+    }
 
     await prisma.session.deleteMany({ where: { userId: user.id } });
 

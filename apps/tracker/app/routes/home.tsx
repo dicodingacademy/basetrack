@@ -5,10 +5,12 @@ import type { Route } from "./+types/home";
 import { getSession, getUserFromSessionId } from "../utils/session.server";
 import { fetchAssignments, fetchProjectDetails, getValidAccessToken } from "../utils/basecamp.server";
 import { getValidGoogleToken, fetchCalendarEvents, fetchTaskLists, fetchTasks } from "../utils/google.server";
-import { startTimer, stopTimer, getActiveTimer, getPendingApprovals, approveTimeEntry } from "../services/timer.server";
+import { getActiveTimer, getPendingApprovals, approveTimeEntry } from "../services/timer.server";
 import { generateNewApiKey } from "../services/user.server";
 import { getRules, saveRule, deleteRule, updateUserTimezone, replaceAllRules } from "../services/rules.server";
 import { disconnectGoogle } from "../utils/google.server";
+import { prisma } from "../utils/db.server";
+import { randomUUID } from "node:crypto";
 import { Button } from "../components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "../components/ui/card";
 import { Skeleton } from "../components/ui/skeleton";
@@ -42,6 +44,7 @@ import { Clock, Briefcase, LayoutDashboard, CheckCircle2, ArrowRight, LogOut, Li
 import type { BasecampAssignment, BasecampProject, GroupedAssignment, GroupedTask } from "../types/basecamp";
 import type { GoogleCalendarEvent, GoogleTask, TimerSource } from "../types/google";
 import type { Condition } from "../components/home/types";
+import type { StartTimerData } from "../hooks/useTimerWebSocket";
 
 type AppData = {
   groupedAssignments: GroupedAssignment[];
@@ -196,31 +199,40 @@ export async function loader({ request }: Route.LoaderArgs) {
     return { user: null, activeTimer: null, googleConnected: false, data: null };
   }
 
-  const user = await getUserFromSessionId(sessionId);
+  let user = await getUserFromSessionId(sessionId);
 
   if (!user) {
     return { user: null, activeTimer: null, googleConnected: false, data: null };
   }
 
-  const activeTimer = await getActiveTimer(user.id);
-  const rules = (await getRules(user.id)).map((r) => ({
+  // Ensure every user has an API key for WebSocket auth
+  if (!user.apiKey) {
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { apiKey: randomUUID() },
+    });
+    user = await getUserFromSessionId(sessionId);
+  }
+
+  const activeTimer = await getActiveTimer(user!.id);
+  const rules = (await getRules(user!.id)).map((r) => ({
     ...r,
     conditions: r.conditions as unknown as Condition[],
   }));
 
   return {
     user: {
-      id: user.id,
-      name: user.name,
-      email: user.email,
-      timezone: user.timezone,
-      apiKey: user.apiKey,
+      id: user!.id,
+      name: user!.name,
+      email: user!.email,
+      timezone: user!.timezone,
+      apiKey: user!.apiKey,
     },
-    googleConnected: !!user.googleAccessToken,
+    googleConnected: !!user!.googleAccessToken,
     activeTimer,
     rules,
     wsUrl: process.env.WS_PUBLIC_URL || "ws://localhost:8081",
-    data: loadData(user),
+    data: loadData(user!),
   };
 }
 
@@ -235,29 +247,6 @@ export async function action({ request }: Route.ActionArgs) {
 
   const user = await getUserFromSessionId(sessionId);
   if (!user) return new Response("Unauthorized", { status: 401 });
-
-  if (intent === "START_TIMER") {
-    const todoId = formData.get("todoId") as string;
-    const todoTitle = formData.get("todoTitle") as string;
-    const projectId = formData.get("projectId") as string;
-    const projectName = formData.get("projectName") as string;
-
-    return await startTimer(user.id, { todoId, todoTitle, projectId, projectName });
-  }
-
-  if (intent === "START_GOOGLE_TIMER") {
-    const source = formData.get("source") as string;
-    const itemId = formData.get("itemId") as string;
-    const itemTitle = formData.get("itemTitle") as string;
-    const projectId = formData.get("projectId") as string;
-    const projectName = formData.get("projectName") as string;
-
-    return await startTimer(user.id, { todoId: itemId, todoTitle: itemTitle, projectId, projectName, source });
-  }
-
-  if (intent === "STOP_TIMER") {
-    return await stopTimer(user.id, user.basecampAccountId);
-  }
 
   if (intent === "APPROVE_TIMER") {
     const entryId = formData.get("entryId") as string;
@@ -352,32 +341,16 @@ export async function action({ request }: Route.ActionArgs) {
 
 export default function Home({ loaderData }: Route.ComponentProps) {
   const { user, activeTimer: serverActiveTimer, wsUrl, googleConnected, rules } = loaderData;
-  const navigation = useNavigation();
-
-  let activeTimer = serverActiveTimer;
-
-  if (navigation.formData) {
-    const intent = navigation.formData.get("intent");
-    if ((intent === "START_TIMER" || intent === "START_GOOGLE_TIMER") && user) {
-      activeTimer = {
-        id: "optimistic",
-        userId: user.id,
-        todoId: navigation.formData.get("todoId") as string || navigation.formData.get("itemId") as string,
-        todoTitle: navigation.formData.get("todoTitle") as string || navigation.formData.get("itemTitle") as string,
-        projectId: navigation.formData.get("projectId") as string,
-        projectName: navigation.formData.get("projectName") as string,
-        startedAt: new Date(),
-        lastPingAt: new Date(),
-        source: (navigation.formData.get("source") as string) || "BASECAMP",
-      };
-    } else if (intent === "STOP_TIMER") {
-      activeTimer = null;
-    }
-  }
 
   const [activeTab, setActiveTab] = useState<"basecamp" | "calendar" | "tasks">("basecamp");
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
 
-  useTimerWebSocket(user?.apiKey, wsUrl);
+  const { activeTimer, startTimer, stopTimer, isPending } = useTimerWebSocket(
+    user?.apiKey,
+    wsUrl,
+    serverActiveTimer
+  );
+
   useTimerTitle(activeTimer);
 
   if (!user) {
@@ -463,7 +436,14 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 
           <Suspense fallback={<ProjectListSkeleton />}>
             <Await resolve={loaderData.data}>
-              {(data) => data ? <ProjectList data={data} activeTab={activeTab} /> : null}
+              {(data) => data ? (
+                <ProjectList
+                  data={data}
+                  activeTab={activeTab}
+                  selectedProjectId={selectedProjectId}
+                  onSelectProject={setSelectedProjectId}
+                />
+              ) : null}
             </Await>
           </Suspense>
         </SidebarContent>
@@ -523,6 +503,11 @@ export default function Home({ loaderData }: Route.ComponentProps) {
                 activeTab={activeTab}
                 activeTimer={activeTimer}
                 googleConnected={googleConnected}
+                onStart={startTimer}
+                onStop={stopTimer}
+                isPending={isPending}
+                selectedProjectId={selectedProjectId}
+                onSelectProject={setSelectedProjectId}
               />
             ) : (
               <ContentSkeleton />
@@ -594,10 +579,13 @@ function ContentSkeleton() {
   );
 }
 
-function ProjectList({ data, activeTab }: { data: AppData; activeTab: string }) {
-  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(
-    data.groupedAssignments.length > 0 ? data.groupedAssignments[0].projectId : null
-  );
+function ProjectList({ data, activeTab, selectedProjectId, onSelectProject }: {
+  data: AppData;
+  activeTab: string;
+  selectedProjectId: string | null;
+  onSelectProject: (id: string) => void;
+}) {
+  const effectiveSelected = selectedProjectId ?? data.groupedAssignments[0]?.projectId ?? null;
 
   if (activeTab !== "basecamp") return null;
 
@@ -607,12 +595,12 @@ function ProjectList({ data, activeTab }: { data: AppData; activeTab: string }) 
       <SidebarGroupContent>
         <SidebarMenu>
           {data.groupedAssignments.map((project: GroupedAssignment) => {
-            const isSelected = project.projectId === selectedProjectId;
+            const isSelected = project.projectId === effectiveSelected;
             return (
               <SidebarMenuItem key={project.projectId}>
                 <SidebarMenuButton
                   isActive={isSelected}
-                  onClick={() => setSelectedProjectId(project.projectId)}
+                  onClick={() => onSelectProject(project.projectId)}
                   className="min-w-0"
                 >
                   <Briefcase className="w-4 h-4 shrink-0" />
@@ -628,18 +616,21 @@ function ProjectList({ data, activeTab }: { data: AppData; activeTab: string }) 
   );
 }
 
-function DashboardContent({ data, activeTab, activeTimer, googleConnected }: {
+function DashboardContent({ data, activeTab, activeTimer, googleConnected, onStart, onStop, isPending, selectedProjectId, onSelectProject }: {
   data: AppData;
   activeTab: string;
   activeTimer: any;
   googleConnected: boolean;
+  onStart: (data: StartTimerData) => void;
+  onStop: () => void;
+  isPending: boolean;
+  selectedProjectId: string | null;
+  onSelectProject: (id: string) => void;
 }) {
-  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(
-    data.groupedAssignments.length > 0 ? data.groupedAssignments[0].projectId : null
-  );
+  const effectiveSelected = selectedProjectId ?? data.groupedAssignments[0]?.projectId ?? null;
 
   const selectedProject = data.groupedAssignments.find(
-    (p: GroupedAssignment) => p.projectId === selectedProjectId
+    (p: GroupedAssignment) => p.projectId === effectiveSelected
   );
 
   return (
@@ -673,6 +664,9 @@ function DashboardContent({ data, activeTab, activeTimer, googleConnected }: {
                           task={task}
                           selectedProject={selectedProject}
                           activeTimer={activeTimer}
+                          onStart={onStart}
+                          onStop={onStop}
+                          isPending={isPending}
                         />
                       ))}
                     </CardContent>
@@ -680,7 +674,7 @@ function DashboardContent({ data, activeTab, activeTimer, googleConnected }: {
                 ) : null}
               </div>
               <div className="xl:col-span-1 sticky top-24">
-                <ActiveTimerCard activeTimer={activeTimer} />
+                <ActiveTimerCard activeTimer={activeTimer} onStop={onStop} isPending={isPending} />
               </div>
             </div>
           </>
@@ -719,6 +713,9 @@ function DashboardContent({ data, activeTab, activeTimer, googleConnected }: {
                         source="GOOGLE_CALENDAR"
                         projects={data.timesheetProjects}
                         isActive={activeTimer?.todoId === event.id}
+                        onStart={onStart}
+                        onStop={onStop}
+                        isPending={isPending}
                       />
                     ))}
                   </CardContent>
@@ -726,7 +723,7 @@ function DashboardContent({ data, activeTab, activeTimer, googleConnected }: {
               )}
             </div>
             <div className="xl:col-span-1 sticky top-24">
-              <ActiveTimerCard activeTimer={activeTimer} />
+              <ActiveTimerCard activeTimer={activeTimer} onStop={onStop} isPending={isPending} />
             </div>
           </div>
         ) : (
@@ -764,6 +761,9 @@ function DashboardContent({ data, activeTab, activeTimer, googleConnected }: {
                         source="GOOGLE_TASKS"
                         projects={data.timesheetProjects}
                         isActive={activeTimer?.todoId === task.id}
+                        onStart={onStart}
+                        onStop={onStop}
+                        isPending={isPending}
                       />
                     ))}
                   </CardContent>
@@ -771,7 +771,7 @@ function DashboardContent({ data, activeTab, activeTimer, googleConnected }: {
               )}
             </div>
             <div className="xl:col-span-1 sticky top-24">
-              <ActiveTimerCard activeTimer={activeTimer} />
+              <ActiveTimerCard activeTimer={activeTimer} onStop={onStop} isPending={isPending} />
             </div>
           </div>
         )}
