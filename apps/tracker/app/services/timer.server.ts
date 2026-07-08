@@ -33,6 +33,7 @@ export async function approveTimeEntry(
 
   const durationHours = updatedDurationSec / 3600;
   let newStatus: "PENDING" | "SYNCED" | "FAILED" = "FAILED";
+  let syncError: string | null = null;
 
   try {
     const accessToken = await getValidAccessToken(userId);
@@ -55,10 +56,9 @@ export async function approveTimeEntry(
       if (!found) {
         console.warn(
           `[SYNC] Project ${entry.projectId} has no project-level timesheet entries. ` +
-          `Basecamp recording ID cannot be discovered. ` +
           `Log at least one project-level time entry manually in Basecamp to enable auto-sync.`
         );
-        newStatus = "FAILED";
+        syncError = "Project has no timesheet recording in Basecamp. Log a project-level time entry manually first.";
         throw new Error("bootstrap");
       }
       recordingId = found;
@@ -69,7 +69,7 @@ export async function approveTimeEntry(
   } catch (err: any) {
     if (err?.message !== "bootstrap") {
       console.error("Failed to sync timesheet entry on approval:", err);
-      newStatus = "FAILED";
+      syncError = (err as Error).message || "Basecamp sync failed";
     }
   }
 
@@ -78,6 +78,7 @@ export async function approveTimeEntry(
     data: {
       durationSec: updatedDurationSec,
       syncStatus: newStatus,
+      syncError,
     },
   });
 
