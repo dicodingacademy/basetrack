@@ -3,6 +3,7 @@ import { type RouteConfig, index, route } from "@react-router/dev/routes";
 export default [
   index("routes/home.tsx"),
   route("api/check-timesheet", "routes/api.check-timesheet.tsx"),
+  route("api/project-tasks", "routes/api.project-tasks.tsx"),
   route("auth/basecamp", "routes/auth.basecamp.tsx"),
   route("auth/callback", "routes/auth.callback.tsx"),
   route("auth/logout", "routes/auth.logout.tsx"),
