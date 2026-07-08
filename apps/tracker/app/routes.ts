@@ -7,5 +7,4 @@ export default [
   route("auth/logout", "routes/auth.logout.tsx"),
   route("auth/google", "routes/auth.google.tsx"),
   route("auth/google/callback", "routes/auth.google.callback.tsx"),
-  route("api/internal/stop", "routes/api.internal.stop.tsx"),
 ] satisfies RouteConfig;
