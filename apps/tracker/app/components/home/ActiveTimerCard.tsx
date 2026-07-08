@@ -1,4 +1,3 @@
-import { Form } from "react-router";
 import { Clock, Square, Calendar, CheckSquare } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/card";
 import { Button } from "../../components/ui/button";
@@ -9,6 +8,8 @@ import type { ActiveTimerType } from "../../types/basecamp";
 
 type ActiveTimerProps = {
   activeTimer: ActiveTimerType | null;
+  onStop: () => void;
+  isPending: boolean;
 };
 
 const sourceConfig: Record<string, { icon: typeof Clock; label: string; color: string }> = {
@@ -16,7 +17,7 @@ const sourceConfig: Record<string, { icon: typeof Clock; label: string; color: s
   GOOGLE_TASKS: { icon: CheckSquare, label: "Task", color: "text-green-500" },
 };
 
-export function ActiveTimerCard({ activeTimer }: ActiveTimerProps) {
+export function ActiveTimerCard({ activeTimer, onStop, isPending }: ActiveTimerProps) {
   const sourceInfo = activeTimer ? sourceConfig[activeTimer.source] : null;
 
   return (
@@ -51,13 +52,16 @@ export function ActiveTimerCard({ activeTimer }: ActiveTimerProps) {
               <span className="text-2xl font-mono font-bold tracking-tighter text-primary">
                 <LiveTimer startedAt={activeTimer.startedAt} />
               </span>
-              <Form method="post">
-                <input type="hidden" name="intent" value="STOP_TIMER" />
-                <Button type="submit" variant="destructive" size="sm">
-                  <Square className="w-4 h-4 mr-2 fill-current" />
-                  Stop
-                </Button>
-              </Form>
+              <Button
+                type="button"
+                variant="destructive"
+                size="sm"
+                disabled={isPending}
+                onClick={onStop}
+              >
+                <Square className="w-4 h-4 mr-2 fill-current" />
+                Stop
+              </Button>
             </div>
           </div>
         ) : (

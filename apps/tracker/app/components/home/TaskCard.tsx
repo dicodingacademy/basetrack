@@ -1,4 +1,3 @@
-import { Form } from "react-router";
 import { Play, Clock, Calendar } from "lucide-react";
 import { Badge } from "../../components/ui/badge";
 import { Button } from "../../components/ui/button";
@@ -6,20 +5,24 @@ import { Avatar, AvatarImage, AvatarFallback, AvatarGroup } from "../../componen
 import { LiveTimer } from "./LiveTimer";
 
 import type { GroupedTask, GroupedAssignment, ActiveTimerType } from "../../types/basecamp";
+import type { StartTimerData } from "../../hooks/useTimerWebSocket";
 
 type TaskProps = {
   task: GroupedTask;
   selectedProject: GroupedAssignment;
   activeTimer: ActiveTimerType | null;
+  onStart: (data: StartTimerData) => void;
+  onStop: () => void;
+  isPending: boolean;
 };
 
-export function TaskCard({ task, selectedProject, activeTimer }: TaskProps) {
+export function TaskCard({ task, selectedProject, activeTimer, onStart, onStop, isPending }: TaskProps) {
   const isActive = activeTimer?.todoId === task.id;
 
   const bracketRegex = /\[([^\]]+)\]/g;
   const extractedBadges: { text: string; variant: "default" | "secondary" | "destructive" | "outline" }[] = [];
   let match;
-  
+
   while ((match = bracketRegex.exec(task.title)) !== null) {
     const text = match[1].trim();
     if (text.toUpperCase() === "P1") {
@@ -32,11 +35,24 @@ export function TaskCard({ task, selectedProject, activeTimer }: TaskProps) {
       extractedBadges.push({ text, variant: "outline" });
     }
   }
-  
+
   const priorityBadges = extractedBadges.filter(b => ["HIGH", "MEDIUM", "LOW"].includes(b.text));
   const otherBadges = extractedBadges.filter(b => !["HIGH", "MEDIUM", "LOW"].includes(b.text));
 
   const cleanTitle = task.title.replace(bracketRegex, "").trim();
+
+  const handleClick = () => {
+    if (isActive) {
+      onStop();
+    } else {
+      onStart({
+        todoId: task.id,
+        todoTitle: task.title,
+        projectId: selectedProject.projectId,
+        projectName: selectedProject.projectName,
+      });
+    }
+  };
 
   return (
     <div className={`group p-4 rounded-xl border flex gap-4 items-center justify-between transition-all hover:shadow-md overflow-hidden ${isActive ? "border-primary/50 shadow-primary/10 ring-1 ring-primary/20 bg-primary/[0.02]" : "border-border/60"}`}>
@@ -69,13 +85,13 @@ export function TaskCard({ task, selectedProject, activeTimer }: TaskProps) {
           {otherBadges.map((badge, idx) => (
             <Badge key={idx} variant={badge.variant}>{badge.text}</Badge>
           ))}
-          
+
           {task.parent && (
             <Badge variant="secondary" className="font-normal" title={task.parent.type === "Column" ? "Column" : "To-do List"}>
               {task.parent.title}
             </Badge>
           )}
-          
+
           {task.dueOn && (
             <div className="flex items-center text-xs text-muted-foreground gap-1" title="Deadline">
               <Calendar className="w-3.5 h-3.5" />
@@ -91,16 +107,14 @@ export function TaskCard({ task, selectedProject, activeTimer }: TaskProps) {
           )}
         </div>
       </div>
-      <Form
-        method="post"
-        className={`shrink-0 transition-opacity ${isActive ? "opacity-100" : "opacity-0 group-hover:opacity-100 focus-within:opacity-100"}`}
-      >
-        <input type="hidden" name="intent" value="START_TIMER" />
-        <input type="hidden" name="todoId" value={task.id} />
-        <input type="hidden" name="todoTitle" value={task.title} />
-        <input type="hidden" name="projectId" value={selectedProject.projectId} />
-        <input type="hidden" name="projectName" value={selectedProject.projectName} />
-        <Button type="submit" disabled={isActive} variant={isActive ? "secondary" : "default"} size="sm">
+      <div className={`shrink-0 transition-opacity ${isActive ? "opacity-100" : "opacity-0 group-hover:opacity-100 focus-within:opacity-100"}`}>
+        <Button
+          type="button"
+          disabled={isPending}
+          variant={isActive ? "secondary" : "default"}
+          size="sm"
+          onClick={handleClick}
+        >
           {isActive ? (
             <>
               <Clock className="w-3.5 h-3.5 mr-2 animate-pulse" />
@@ -113,7 +127,7 @@ export function TaskCard({ task, selectedProject, activeTimer }: TaskProps) {
             </>
           )}
         </Button>
-      </Form>
+      </div>
     </div>
   );
 }

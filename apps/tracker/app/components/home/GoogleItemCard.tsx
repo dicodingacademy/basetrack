@@ -1,19 +1,22 @@
 import { useState } from "react";
-import { Form } from "react-router";
-import { Play, Calendar, CheckSquare, Clock } from "lucide-react";
+import { Play, Calendar, CheckSquare, Clock, Square } from "lucide-react";
 import { Badge } from "../../components/ui/badge";
 import { Button } from "../../components/ui/button";
 import { ProjectPickerModal } from "./ProjectPickerModal";
 import type { GoogleCalendarEvent, GoogleTask, TimerSource } from "../../types/google";
+import type { StartTimerData } from "../../hooks/useTimerWebSocket";
 
 type GoogleItemProps = {
   item: GoogleCalendarEvent | GoogleTask;
   source: TimerSource;
   projects: { id: string; name: string }[];
   isActive: boolean;
+  onStart: (data: StartTimerData) => void;
+  onStop: () => void;
+  isPending: boolean;
 };
 
-export function GoogleItemCard({ item, source, projects, isActive }: GoogleItemProps) {
+export function GoogleItemCard({ item, source, projects, isActive, onStart, onStop, isPending }: GoogleItemProps) {
   const [selectedProject, setSelectedProject] = useState<{ id: string; name: string } | null>(null);
   const isCalendar = source === "GOOGLE_CALENDAR";
   const displayTitle = isCalendar
@@ -30,6 +33,16 @@ export function GoogleItemCard({ item, source, projects, isActive }: GoogleItemP
   const formatDue = (task: GoogleTask) => {
     if (task.due) return new Date(task.due).toLocaleDateString();
     return null;
+  };
+
+  const handleStart = (project: { id: string; name: string }) => {
+    onStart({
+      todoId: item.id,
+      todoTitle: displayTitle,
+      projectId: project.id,
+      projectName: project.name,
+      source,
+    });
   };
 
   return (
@@ -69,7 +82,7 @@ export function GoogleItemCard({ item, source, projects, isActive }: GoogleItemP
               )}
             </>
           )}
-          
+
           {isActive && (
             <span className="flex h-2 w-2 relative ml-1" title="Currently tracking">
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
@@ -80,37 +93,33 @@ export function GoogleItemCard({ item, source, projects, isActive }: GoogleItemP
       </div>
       <div className="shrink-0 flex items-center gap-2">
         {isActive ? (
-          <div className="opacity-100">
-            <Form method="post">
-              <input type="hidden" name="intent" value="STOP_TIMER" />
-              <Button type="submit" variant="destructive" size="sm">Stop</Button>
-            </Form>
-          </div>
+          <Button type="button" variant="destructive" size="sm" disabled={isPending} onClick={onStop}>
+            <Square className="w-3.5 h-3.5 mr-2 fill-current" />
+            Stop
+          </Button>
+        ) : selectedProject ? (
+          <Button
+            type="button"
+            size="sm"
+            disabled={isPending}
+            onClick={() => handleStart(selectedProject)}
+          >
+            <Play className="w-3.5 h-3.5 mr-2" />
+            Start Timer
+          </Button>
         ) : (
-          selectedProject ? (
-            <Form method="post">
-              <input type="hidden" name="intent" value="START_GOOGLE_TIMER" />
-              <input type="hidden" name="source" value={source} />
-              <input type="hidden" name="itemId" value={item.id} />
-              <input type="hidden" name="itemTitle" value={displayTitle} />
-              <input type="hidden" name="projectId" value={selectedProject.id} />
-              <input type="hidden" name="projectName" value={selectedProject.name} />
-              <Button type="submit" size="sm">
-                <Play className="w-3.5 h-3.5 mr-2" />
-                Start Timer
-              </Button>
-            </Form>
-          ) : (
-            <ProjectPickerModal
-              projects={projects}
-              onSelect={setSelectedProject}
-            >
-              <Button variant="outline" size="sm">
-                <Play className="w-3.5 h-3.5 mr-2" />
-                Start Timer
-              </Button>
-            </ProjectPickerModal>
-          )
+          <ProjectPickerModal
+            projects={projects}
+            onSelect={(project) => {
+              setSelectedProject(project);
+              handleStart(project);
+            }}
+          >
+            <Button variant="outline" size="sm" disabled={isPending}>
+              <Play className="w-3.5 h-3.5 mr-2" />
+              Start Timer
+            </Button>
+          </ProjectPickerModal>
         )}
       </div>
     </div>
