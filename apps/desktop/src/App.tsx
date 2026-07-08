@@ -146,7 +146,7 @@ function App() {
 
   const handleToggleTimer = () => {
     if (activeTimer && wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify({ type: "STOP_TIMER", apiKey }));
+      wsRef.current.send(JSON.stringify({ type: "STOP_TIMER" }));
     }
   };
 
