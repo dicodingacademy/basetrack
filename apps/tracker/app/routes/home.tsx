@@ -1,9 +1,9 @@
-import { useState, Suspense } from "react";
-import { useNavigation, Form, Await } from "react-router";
+import { useState, useEffect, Suspense } from "react";
+import { Form, Await } from "react-router";
 
 import type { Route } from "./+types/home";
 import { getSession, getUserFromSessionId } from "../utils/session.server";
-import { fetchAssignments, fetchProjectDetails, getValidAccessToken } from "../utils/basecamp.server";
+import { fetchAssignments, getValidAccessToken } from "../utils/basecamp.server";
 import { getValidGoogleToken, fetchCalendarEvents, fetchTaskLists, fetchTasks } from "../utils/google.server";
 import { getActiveTimer, getPendingApprovals, approveTimeEntry } from "../services/timer.server";
 import { generateNewApiKey } from "../services/user.server";
@@ -11,13 +11,12 @@ import { getRules, saveRule, deleteRule, updateUserTimezone, replaceAllRules } f
 import { disconnectGoogle } from "../utils/google.server";
 import { prisma } from "../utils/db.server";
 import { randomUUID } from "node:crypto";
-import { Button } from "../components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "../components/ui/card";
-import { Skeleton } from "../components/ui/skeleton";
 
+import { cn } from "../lib/utils";
+import { Button } from "../components/ui/button";
+import { Badge } from "../components/ui/badge";
+import { Skeleton } from "../components/ui/skeleton";
 import { Avatar, AvatarFallback } from "../components/ui/avatar";
-import { useTimerWebSocket } from "../hooks/useTimerWebSocket";
-import { useTimerTitle } from "../hooks/useTimerTitle";
 
 import {
   Sidebar,
@@ -35,19 +34,34 @@ import {
   SidebarInset,
   SidebarTrigger,
 } from "../components/ui/sidebar";
-import { TaskCard } from "../components/home/TaskCard";
-import { GoogleItemCard } from "../components/home/GoogleItemCard";
-import { ActiveTimerCard } from "../components/home/ActiveTimerCard";
+
+import { useTimerWebSocket } from "../hooks/useTimerWebSocket";
+import { useTimerTitle } from "../hooks/useTimerTitle";
+import { ProjectPickerModal } from "../components/home/ProjectPickerModal";
 import { PendingApprovals } from "../components/home/PendingApprovals";
 import { SettingsModal } from "../components/home/SettingsModal";
-import { Clock, Briefcase, LayoutDashboard, CheckCircle2, ArrowRight, LogOut, ListTodo, Calendar } from "lucide-react";
-import type { BasecampAssignment, BasecampProject, GroupedAssignment, GroupedTask } from "../types/basecamp";
-import type { GoogleCalendarEvent, GoogleTask, TimerSource } from "../types/google";
+
+import {
+  Briefcase,
+  Calendar,
+  ListTodo,
+  Clock,
+  Square,
+  Play,
+  ChevronLeft,
+  ChevronRight,
+  CheckCircle2,
+  ArrowRight,
+  LogOut,
+} from "lucide-react";
+
+import type { BasecampAssignment, GroupedTask } from "../types/basecamp";
+import type { GoogleCalendarEvent, GoogleTask } from "../types/google";
 import type { Condition } from "../components/home/types";
 import type { StartTimerData } from "../hooks/useTimerWebSocket";
 
 type AppData = {
-  groupedAssignments: GroupedAssignment[];
+  projects: { id: string; name: string; taskCount: number }[];
   pendingApprovals: any[];
   timesheetProjects: { id: string; name: string }[];
   calendarEvents: GoogleCalendarEvent[];
@@ -62,75 +76,34 @@ export function meta(_args: Route.MetaArgs) {
 }
 
 async function loadData(user: any): Promise<AppData> {
-  let groupedAssignments: GroupedAssignment[] = [];
-  let rawProjects: any[] = [];
+  let projects: { id: string; name: string; taskCount: number }[] = [];
 
   try {
     const accessToken = await getValidAccessToken(user.id);
     const rawAssignments = await fetchAssignments(user.basecampAccountId, accessToken);
 
-    let items = [];
+    let items: BasecampAssignment[] = [];
     if (Array.isArray(rawAssignments)) {
       items = rawAssignments;
     } else {
       items = [...(rawAssignments.priorities || []), ...(rawAssignments.non_priorities || [])];
     }
 
-    const uniqueBucketIds = Array.from(new Set(items.map((i: BasecampAssignment) => i.bucket?.id?.toString()).filter(Boolean))) as string[];
-    rawProjects = await fetchProjectDetails(user.basecampAccountId, uniqueBucketIds, accessToken);
-
-    const timesheetEnabledProjectIds = new Set(
-      rawProjects
-        .filter((p: BasecampProject) => p.timesheet_enabled)
-        .map((p: BasecampProject) => p.id)
-    );
-
-    const grouped = items.reduce((acc: Record<string, GroupedAssignment>, curr: BasecampAssignment) => {
-      if (!curr.bucket) return acc;
-      const bucketId = curr.bucket.id;
-      if (!timesheetEnabledProjectIds.has(bucketId)) return acc;
-
-      if (curr.completed === true || curr.status === 'archived' || curr.status === 'trashed') return acc;
-
-      if (!acc[bucketId]) {
-        acc[bucketId] = {
-          projectId: curr.bucket.id.toString(),
-          projectName: curr.bucket.name,
-          tasks: [],
-        };
-      }
-      acc[bucketId].tasks.push({
-        id: curr.id.toString(),
-        title: curr.title || curr.content || "Untitled Task",
-        type: curr.type,
-        dueOn: curr.due_on || null,
-        assignees: curr.assignees?.map(a => ({
-          id: a.id,
-          name: a.name,
-          avatarUrl: a.avatar_url,
-        })) || [],
-        parent: curr.parent ? {
-          id: curr.parent.id,
-          title: curr.parent.title,
-          type: curr.parent.type,
-        } : undefined,
-      });
-      return acc;
-    }, {});
-
-    groupedAssignments = Object.values(grouped);
+    const counts: Record<string, { name: string; count: number }> = {};
+    for (const curr of items) {
+      if (!curr.bucket) continue;
+      if (curr.completed === true || curr.status === "archived" || curr.status === "trashed") continue;
+      const id = curr.bucket.id.toString();
+      if (!counts[id]) counts[id] = { name: curr.bucket.name, count: 0 };
+      counts[id].count++;
+    }
+    projects = Object.entries(counts).map(([id, { name, count }]) => ({ id, name, taskCount: count }));
   } catch (err) {
     console.error("Fetch assignments failed", err);
   }
 
   const pendingApprovals = await getPendingApprovals(user.id);
-
-  const timesheetProjects: { id: string; name: string }[] = [];
-  rawProjects
-    .filter((p: BasecampProject & { name?: string }) => p.timesheet_enabled)
-    .forEach((p: BasecampProject & { name?: string }) => {
-      if (p.name) timesheetProjects.push({ id: p.id.toString(), name: p.name });
-    });
+  const timesheetProjects = projects.map(p => ({ id: p.id, name: p.name }));
 
   let calendarEvents: GoogleCalendarEvent[] = [];
   let googleTasks: GoogleTask[] = [];
@@ -187,7 +160,7 @@ async function loadData(user: any): Promise<AppData> {
     }
   }
 
-  return { groupedAssignments, pendingApprovals, timesheetProjects, calendarEvents, googleTasks };
+  return { projects, pendingApprovals, timesheetProjects, calendarEvents, googleTasks };
 }
 
 export async function loader({ request }: Route.LoaderArgs) {
@@ -205,7 +178,6 @@ export async function loader({ request }: Route.LoaderArgs) {
     return { user: null, activeTimer: null, googleConnected: false, data: null };
   }
 
-  // Ensure every user has an API key for WebSocket auth
   if (!user.apiKey) {
     await prisma.user.update({
       where: { id: user.id },
@@ -254,7 +226,6 @@ export async function action({ request }: Route.ActionArgs) {
     if (!entryId || isNaN(durationHours)) {
       return new Response("Invalid data", { status: 400 });
     }
-
     return await approveTimeEntry(user.id, entryId, user.basecampAccountId, Math.floor(durationHours * 3600));
   }
 
@@ -263,28 +234,11 @@ export async function action({ request }: Route.ActionArgs) {
     const name = formData.get("name") as string;
     const enabled = formData.get("enabled") === "true";
     const conditionsStr = formData.get("conditions") as string;
-
-    if (!conditionsStr) {
-      return new Response("Missing conditions", { status: 400 });
-    }
-
+    if (!conditionsStr) return new Response("Missing conditions", { status: 400 });
     let conditions;
-    try {
-      conditions = JSON.parse(conditionsStr);
-    } catch {
-      return new Response("Invalid conditions JSON", { status: 400 });
-    }
-
-    if (!Array.isArray(conditions) || conditions.length === 0) {
-      return new Response("At least one condition required", { status: 400 });
-    }
-
-    await saveRule(user.id, {
-      id: ruleId || undefined,
-      name: name || undefined,
-      enabled,
-      conditions,
-    });
+    try { conditions = JSON.parse(conditionsStr); } catch { return new Response("Invalid conditions JSON", { status: 400 }); }
+    if (!Array.isArray(conditions) || conditions.length === 0) return new Response("At least one condition required", { status: 400 });
+    await saveRule(user.id, { id: ruleId || undefined, name: name || undefined, enabled, conditions });
     return { success: true };
   }
 
@@ -298,24 +252,10 @@ export async function action({ request }: Route.ActionArgs) {
   if (intent === "SAVE_ALL_RULES") {
     const rulesStr = formData.get("rules") as string;
     if (!rulesStr) return new Response("Missing rules", { status: 400 });
-
     let rules;
-    try {
-      rules = JSON.parse(rulesStr);
-    } catch {
-      return new Response("Invalid JSON", { status: 400 });
-    }
-
+    try { rules = JSON.parse(rulesStr); } catch { return new Response("Invalid JSON", { status: 400 }); }
     if (!Array.isArray(rules)) return new Response("Expected array", { status: 400 });
-
-    await replaceAllRules(
-      user.id,
-      rules.map((r: any) => ({
-        name: r.name,
-        enabled: r.enabled !== false,
-        conditions: r.conditions,
-      }))
-    );
+    await replaceAllRules(user.id, rules.map((r: any) => ({ name: r.name, enabled: r.enabled !== false, conditions: r.conditions })));
     return { success: true };
   }
 
@@ -339,56 +279,326 @@ export async function action({ request }: Route.ActionArgs) {
   return { success: false };
 }
 
+// ── HELPERS ──────────────────────────────────────────────────────────────
+
+function fmtTime(s: number) {
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = s % 60;
+  return `${h}:${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}`;
+}
+
+// ── EVENT CARD (shared by Basecamp tasks, Calendar events, Google Tasks) ─
+
+type EventCardProps = {
+  isActive: boolean;
+  timeLabel: string;
+  typeLabel: string;
+  title: string;
+  tags?: string[];
+  isPending: boolean;
+  onStop: () => void;
+  startSlot: React.ReactNode;
+};
+
+function EventCard({ isActive, timeLabel, typeLabel, title, tags, isPending, onStop, startSlot }: EventCardProps) {
+  return (
+    <div className={cn(
+      "group flex items-stretch rounded-xl border bg-card overflow-hidden transition-all",
+      "hover:-translate-y-px hover:shadow-lg hover:border-muted-foreground",
+      isActive && "border-primary bg-primary/10"
+    )}>
+      <div className={cn("w-1 shrink-0 bg-border transition-colors", isActive && "bg-primary")} />
+      <div className="flex flex-1 items-center gap-3.5 px-4 py-3.5 min-w-0">
+        <div className="w-14 shrink-0">
+          <p className={cn("font-mono text-[13px] font-medium leading-none", isActive ? "text-primary" : "text-foreground")}>
+            {timeLabel}
+          </p>
+          <p className="text-[10px] text-muted-foreground mt-1">{typeLabel}</p>
+        </div>
+        <div className="w-px h-7 bg-border shrink-0" />
+        <div className="flex-1 min-w-0">
+          <p className="text-[13.5px] font-medium truncate text-foreground">{title}</p>
+          {tags && tags.length > 0 && (
+            <div className="flex gap-1 mt-1 flex-wrap">
+              {tags.map(t => (
+                <Badge key={t} variant="secondary" className="text-[10px] px-1.5 py-0 rounded-sm h-auto">{t}</Badge>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+      <div className="flex items-center px-3 shrink-0">
+        {isActive ? (
+          <Button variant="destructive" size="sm" disabled={isPending} onClick={onStop} className="gap-1.5">
+            <Square className="size-2.5 fill-current" />
+            Stop
+          </Button>
+        ) : startSlot}
+      </div>
+    </div>
+  );
+}
+
+// ── BASECAMP TASK CARD ───────────────────────────────────────────────────
+
+function BasecampTaskCard({ task, projectId, projectName, activeTimer, onStart, onStop, isPending }: {
+  task: GroupedTask;
+  projectId: string;
+  projectName: string;
+  activeTimer: any;
+  onStart: (d: StartTimerData) => void;
+  onStop: () => void;
+  isPending: boolean;
+}) {
+  const isActive = activeTimer?.todoId === task.id;
+  const dateLabel = task.dueOn
+    ? new Date(task.dueOn).toLocaleDateString("en-US", { month: "short", day: "numeric" })
+    : "—";
+  return (
+    <EventCard
+      isActive={isActive}
+      timeLabel={dateLabel}
+      typeLabel="Basecamp"
+      title={task.title}
+      tags={task.parent ? [task.parent.title] : undefined}
+      isPending={isPending}
+      onStop={onStop}
+      startSlot={
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={isPending || (!!activeTimer && !isActive)}
+          onClick={() => onStart({ todoId: task.id, todoTitle: task.title, projectId, projectName })}
+          className="gap-1.5"
+        >
+          <Play className="size-2.5 fill-current" />
+          Start
+        </Button>
+      }
+    />
+  );
+}
+
+// ── GOOGLE EVENT CARD ────────────────────────────────────────────────────
+
+function GoogleEventCard({ item, source, projects, isActive, onStart, onStop, isPending }: {
+  item: GoogleCalendarEvent | GoogleTask;
+  source: "GOOGLE_CALENDAR" | "GOOGLE_TASKS";
+  projects: { id: string; name: string }[];
+  isActive: boolean;
+  onStart: (d: StartTimerData) => void;
+  onStop: () => void;
+  isPending: boolean;
+}) {
+  const isCalendar = source === "GOOGLE_CALENDAR";
+  const displayTitle = isCalendar
+    ? (item as GoogleCalendarEvent).summary || "Untitled Event"
+    : (item as GoogleTask).title || "Untitled Task";
+
+  const timeLabel = isCalendar
+    ? (() => {
+        const ev = item as GoogleCalendarEvent;
+        return ev.start.dateTime
+          ? new Date(ev.start.dateTime).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+          : "All day";
+      })()
+    : (() => {
+        const task = item as GoogleTask;
+        return task.due
+          ? new Date(task.due).toLocaleDateString("en-US", { month: "short", day: "numeric" })
+          : "No due";
+      })();
+
+  const handleSelect = async (project: { id: string; name: string }) => {
+    const res = await fetch(`/api/check-timesheet?projectId=${project.id}`);
+    const { available } = await res.json();
+    if (!available) {
+      throw new Error(
+        "Project ini belum punya time entry di Basecamp. Log minimal satu time entry manual di Basecamp untuk project ini terlebih dahulu."
+      );
+    }
+    onStart({ todoId: item.id, todoTitle: displayTitle, projectId: project.id, projectName: project.name, source });
+  };
+
+  return (
+    <EventCard
+      isActive={isActive}
+      timeLabel={timeLabel}
+      typeLabel={isCalendar ? "Calendar" : "Task"}
+      title={displayTitle}
+      isPending={isPending}
+      onStop={onStop}
+      startSlot={
+        <ProjectPickerModal projects={projects} onSelect={handleSelect}>
+          <Button variant="outline" size="sm" disabled={isPending} className="gap-1.5">
+            <Play className="size-2.5 fill-current" />
+            Start
+          </Button>
+        </ProjectPickerModal>
+      }
+    />
+  );
+}
+
+// ── CONTENT SKELETON ─────────────────────────────────────────────────────
+
+function ContentSkeleton() {
+  return (
+    <div className="flex flex-col gap-2.5">
+      {[1, 2, 3, 4].map(i => <Skeleton key={i} className="h-14 w-full rounded-xl" />)}
+    </div>
+  );
+}
+
+// ── EMPTY STATE ──────────────────────────────────────────────────────────
+
+function EmptyState({ icon: Icon, title, sub }: { icon: React.ElementType; title: string; sub: string }) {
+  return (
+    <div className="flex flex-col items-center justify-center py-16 text-center gap-3">
+      <Icon className="size-12 text-muted-foreground" />
+      <p className="font-semibold text-base">{title}</p>
+      <p className="text-sm text-muted-foreground max-w-[260px] leading-relaxed">{sub}</p>
+    </div>
+  );
+}
+
+// ── TIMER PANEL ──────────────────────────────────────────────────────────
+
+function TimerPanel({ activeTimer, elapsed, onStop, isPending }: {
+  activeTimer: any;
+  elapsed: number;
+  onStop: () => void;
+  isPending: boolean;
+}) {
+  return (
+    <div className="w-[270px] h-full border-l bg-sidebar flex flex-col overflow-hidden">
+      {activeTimer ? (
+        <>
+          <div className="px-5 pt-5 pb-0">
+            <p className="text-[9px] font-medium tracking-[0.12em] uppercase text-muted-foreground">Running</p>
+            <p className="font-mono text-[50px] font-light text-primary leading-none mt-2.5 mb-1.5 tracking-tight">
+              {fmtTime(elapsed)}
+            </p>
+            <p className="text-[12.5px] text-muted-foreground leading-snug pb-4 border-b border-border">
+              {activeTimer.todoTitle}
+            </p>
+          </div>
+          <div className="px-5 py-3.5 border-b border-border">
+            <Button
+              variant="destructive"
+              className="w-full gap-2"
+              size="sm"
+              disabled={isPending}
+              onClick={onStop}
+            >
+              <Square className="size-2.5 fill-current" />
+              Stop Timer
+            </Button>
+          </div>
+          <div className="px-5 py-4 flex-1 overflow-y-auto">
+            <p className="text-[9px] font-medium tracking-[0.12em] uppercase text-muted-foreground mb-2">Project</p>
+            <p className="text-[11.5px] text-muted-foreground">{activeTimer.projectName}</p>
+          </div>
+        </>
+      ) : (
+        <div className="flex flex-col items-center justify-center flex-1 gap-3 px-5 py-8 text-center">
+          <div className="size-14 rounded-full border border-dashed border-border flex items-center justify-center text-muted-foreground">
+            <Clock className="size-5" />
+          </div>
+          <p className="text-[12.5px] text-muted-foreground leading-relaxed">
+            No timer running.<br />Pick an item to track.
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── MAIN COMPONENT ───────────────────────────────────────────────────────
+
 export default function Home({ loaderData }: Route.ComponentProps) {
   const { user, activeTimer: serverActiveTimer, wsUrl, googleConnected, rules } = loaderData;
 
+  const TASKS_PER_PAGE = 8;
+
   const [activeTab, setActiveTab] = useState<"basecamp" | "calendar" | "tasks">("basecamp");
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
+  const [tasksCache, setTasksCache] = useState<Record<string, GroupedTask[]>>({});
+  const [isLoadingTasks, setIsLoadingTasks] = useState(false);
+  const [taskPage, setTaskPage] = useState(1);
+  const [elapsed, setElapsed] = useState(0);
+
+  const selectedProjectTasks = selectedProjectId ? tasksCache[selectedProjectId] ?? null : null;
 
   const { activeTimer, startTimer, stopTimer, isPending } = useTimerWebSocket(
-    user?.apiKey,
-    wsUrl,
-    serverActiveTimer
+    user?.apiKey, wsUrl, serverActiveTimer
   );
-
   useTimerTitle(activeTimer);
+
+  useEffect(() => {
+    if (!activeTimer) { setElapsed(0); return; }
+    const start = new Date(activeTimer.startedAt).getTime();
+    const tick = () => setElapsed(Math.floor((Date.now() - start) / 1000));
+    tick();
+    const iv = setInterval(tick, 1000);
+    return () => clearInterval(iv);
+  }, [activeTimer?.startedAt]);
+
+  const handleSelectProject = async (projectId: string) => {
+    setSelectedProjectId(projectId);
+    setTaskPage(1);
+    if (tasksCache[projectId]) return;
+    setIsLoadingTasks(true);
+    try {
+      const res = await fetch(`/api/project-tasks?projectId=${projectId}`);
+      const { tasks } = await res.json();
+      setTasksCache(prev => ({ ...prev, [projectId]: tasks }));
+    } catch {
+      setTasksCache(prev => ({ ...prev, [projectId]: [] }));
+    } finally {
+      setIsLoadingTasks(false);
+    }
+  };
 
   if (!user) {
     return (
-      <div className="flex h-screen w-screen items-center justify-center bg-zinc-50 dark:bg-zinc-950">
-        <Card className="max-w-sm w-full relative overflow-hidden">
-          <div className="absolute inset-0 bg-gradient-to-br from-blue-500/10 to-transparent pointer-events-none" />
-          <CardContent className="p-6 text-center">
-            <div className="w-16 h-16 bg-blue-600 rounded-2xl mx-auto flex items-center justify-center rotate-3 shadow-lg shadow-blue-500/30 mb-6">
-              <Clock className="w-8 h-8 text-white -rotate-3" />
-            </div>
-            <h1 className="text-2xl font-bold tracking-tight mb-2">Basetrack</h1>
-            <p className="text-zinc-500 dark:text-zinc-400 text-sm leading-relaxed mb-6">
-              Seamlessly track time for your Basecamp tasks without leaving the flow.
-            </p>
-            <Button render={<a href="/auth/basecamp" />} className="w-full" size="lg">
-              Login with Basecamp
-              <ArrowRight className="ml-2 w-4 h-4" />
-            </Button>
-          </CardContent>
-        </Card>
+      <div className="flex h-screen w-screen items-center justify-center bg-background">
+        <div className="w-full max-w-sm rounded-2xl border bg-card p-8 text-center shadow-xl">
+          <div className="mx-auto mb-6 flex size-14 items-center justify-center rounded-2xl bg-primary text-primary-foreground font-bold text-xl">
+            BT
+          </div>
+          <h1 className="mb-2 text-2xl font-bold">Basetrack</h1>
+          <p className="mb-6 text-sm text-muted-foreground leading-relaxed">
+            Seamlessly track time for your Basecamp tasks.
+          </p>
+          <Button render={<a href="/auth/basecamp" />} className="w-full" size="lg">
+            Login with Basecamp
+            <ArrowRight className="ml-2 size-4" />
+          </Button>
+        </div>
       </div>
     );
   }
 
+  const today = new Date().toLocaleDateString("en-US", {
+    weekday: "short", month: "short", day: "numeric", year: "numeric",
+  });
+
   return (
     <SidebarProvider>
-      <Sidebar collapsible="offcanvas">
+      {/* ICON RAIL SIDEBAR */}
+      <Sidebar collapsible="icon">
         <SidebarHeader>
           <SidebarMenu>
             <SidebarMenuItem>
-              <SidebarMenuButton size="lg">
-                <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-blue-600 text-white">
-                  <Clock className="size-4" />
+              <SidebarMenuButton size="lg" className="data-[state=open]:bg-sidebar-accent">
+                <div className="flex aspect-square size-8 items-center justify-content rounded-lg bg-primary text-primary-foreground font-bold text-[13px] tracking-tight justify-center shrink-0">
+                  BT
                 </div>
                 <div className="grid flex-1 text-left text-sm leading-tight">
                   <span className="truncate font-semibold">Basetrack</span>
-                  <span className="truncate text-xs">Time Tracker</span>
+                  <span className="truncate text-xs text-muted-foreground">Time Tracker</span>
                 </div>
               </SidebarMenuButton>
             </SidebarMenuItem>
@@ -404,9 +614,9 @@ export default function Home({ loaderData }: Route.ComponentProps) {
                   <SidebarMenuButton
                     isActive={activeTab === "basecamp"}
                     onClick={() => setActiveTab("basecamp")}
-                    className="min-w-0"
+                    tooltip="Basecamp"
                   >
-                    <Briefcase className="w-4 h-4" />
+                    <Briefcase className="size-4" />
                     <span>Basecamp</span>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
@@ -414,9 +624,9 @@ export default function Home({ loaderData }: Route.ComponentProps) {
                   <SidebarMenuButton
                     isActive={activeTab === "calendar"}
                     onClick={() => setActiveTab("calendar")}
-                    className="min-w-0"
+                    tooltip="Calendar"
                   >
-                    <Calendar className="w-4 h-4" />
+                    <Calendar className="size-4" />
                     <span>Calendar</span>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
@@ -424,9 +634,9 @@ export default function Home({ loaderData }: Route.ComponentProps) {
                   <SidebarMenuButton
                     isActive={activeTab === "tasks"}
                     onClick={() => setActiveTab("tasks")}
-                    className="min-w-0"
+                    tooltip="Google Tasks"
                   >
-                    <ListTodo className="w-4 h-4" />
+                    <ListTodo className="size-4" />
                     <span>Tasks</span>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
@@ -434,15 +644,46 @@ export default function Home({ loaderData }: Route.ComponentProps) {
             </SidebarGroupContent>
           </SidebarGroup>
 
-          <Suspense fallback={<ProjectListSkeleton />}>
+          {/* Project list only visible in Basecamp tab */}
+          <Suspense fallback={
+            <SidebarGroup>
+              <SidebarGroupLabel>Projects</SidebarGroupLabel>
+              <SidebarGroupContent>
+                <SidebarMenu>
+                  {[1,2,3].map(i => (
+                    <SidebarMenuItem key={i}>
+                      <SidebarMenuButton>
+                        <Skeleton className="size-4 rounded" />
+                        <Skeleton className="h-4 flex-1" />
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  ))}
+                </SidebarMenu>
+              </SidebarGroupContent>
+            </SidebarGroup>
+          }>
             <Await resolve={loaderData.data}>
-              {(data) => data ? (
-                <ProjectList
-                  data={data}
-                  activeTab={activeTab}
-                  selectedProjectId={selectedProjectId}
-                  onSelectProject={setSelectedProjectId}
-                />
+              {(data) => data && activeTab === "basecamp" ? (
+                <SidebarGroup>
+                  <SidebarGroupLabel>Projects</SidebarGroupLabel>
+                  <SidebarGroupContent>
+                    <SidebarMenu>
+                      {data.projects.map((p) => (
+                        <SidebarMenuItem key={p.id}>
+                          <SidebarMenuButton
+                            isActive={p.id === selectedProjectId}
+                            onClick={() => handleSelectProject(p.id)}
+                            tooltip={p.name}
+                          >
+                            <Briefcase className="size-4 shrink-0" />
+                            <span className="truncate">{p.name}</span>
+                          </SidebarMenuButton>
+                          <SidebarMenuBadge className="font-mono text-[10px]">{p.taskCount}</SidebarMenuBadge>
+                        </SidebarMenuItem>
+                      ))}
+                    </SidebarMenu>
+                  </SidebarGroupContent>
+                </SidebarGroup>
               ) : null}
             </Await>
           </Suspense>
@@ -452,16 +693,16 @@ export default function Home({ loaderData }: Route.ComponentProps) {
           <SidebarMenu>
             <SidebarMenuItem>
               <SidebarMenuButton size="lg">
-                <Avatar className="h-8 w-8 rounded-lg">
-                  <AvatarFallback className="bg-gradient-to-tr from-blue-600 to-indigo-500 text-white font-bold text-xs rounded-lg">
+                <Avatar className="size-8 rounded-lg shrink-0">
+                  <AvatarFallback className="rounded-lg bg-primary text-primary-foreground font-bold text-xs">
                     {user.name.charAt(0)}
                   </AvatarFallback>
                 </Avatar>
-                <div className="grid flex-1 text-left text-sm leading-tight">
+                <div className="grid flex-1 text-left text-sm leading-tight min-w-0">
                   <span className="truncate font-semibold">{user.name}</span>
-                  <span className="truncate text-xs text-zinc-500 dark:text-zinc-400">{user.email}</span>
+                  <span className="truncate text-xs text-muted-foreground">{user.email}</span>
                 </div>
-                <div onClick={(e) => e.stopPropagation()} className="flex items-center gap-1">
+                <div className="flex items-center gap-1 ml-auto" onClick={e => e.stopPropagation()}>
                   <SettingsModal
                     rules={rules}
                     userTimezone={user.timezone ?? "Asia/Jakarta"}
@@ -469,8 +710,14 @@ export default function Home({ loaderData }: Route.ComponentProps) {
                     googleConnected={googleConnected}
                   />
                   <Form method="post" action="/auth/logout">
-                    <Button type="submit" variant="ghost" size="icon" className="h-8 w-8 text-zinc-500 hover:text-red-500" title="Logout">
-                      <LogOut className="h-4 w-4" />
+                    <Button
+                      type="submit"
+                      variant="ghost"
+                      size="icon"
+                      className="size-8 text-muted-foreground hover:text-destructive"
+                      title="Logout"
+                    >
+                      <LogOut className="size-4" />
                     </Button>
                   </Form>
                 </div>
@@ -480,302 +727,231 @@ export default function Home({ loaderData }: Route.ComponentProps) {
         </SidebarFooter>
       </Sidebar>
 
-      <SidebarInset>
-        <header className="sticky top-0 z-20 flex h-16 shrink-0 items-center gap-2 border-b bg-background px-4">
+      {/* MAIN CONTENT */}
+      <SidebarInset className="flex flex-col">
+        {/* TOPBAR */}
+        <header className="sticky top-0 z-10 flex h-13 shrink-0 items-center gap-2 border-b bg-background/95 backdrop-blur-sm px-4">
           <SidebarTrigger className="-ml-1" />
-          <div className="flex items-center gap-2">
-            {activeTab === "basecamp" ? (
-              <LayoutDashboard className="w-5 h-5 text-blue-500" />
-            ) : activeTab === "calendar" ? (
-              <Calendar className="w-5 h-5 text-blue-500" />
-            ) : (
-              <ListTodo className="w-5 h-5 text-blue-500" />
-            )}
-            <h2 className="text-lg font-semibold tracking-tight capitalize">{activeTab}</h2>
+          <div className="w-px h-4 bg-border" />
+          <span className="text-xs text-muted-foreground">Source /</span>
+          <span className="text-sm font-semibold capitalize">{activeTab}</span>
+          <div className="w-px h-4 bg-border" />
+          <span className="font-mono text-xs text-muted-foreground">{today}</span>
+
+          {/* Live timer chip */}
+          <div className={cn(
+            "ml-auto flex items-center gap-2 rounded-full border px-3 py-1.5 font-mono text-xs transition-all",
+            activeTimer
+              ? "border-primary bg-primary/10 text-primary shadow-[0_0_12px_rgba(244,129,63,.3)]"
+              : "border-border bg-card text-muted-foreground"
+          )}>
+            <span className={cn(
+              "size-1.5 rounded-full shrink-0",
+              activeTimer ? "bg-primary animate-live-pulse" : "bg-muted-foreground"
+            )} />
+            {activeTimer ? fmtTime(elapsed) : "No timer"}
           </div>
         </header>
 
-        <Suspense fallback={<ContentSkeleton />}>
-          <Await resolve={loaderData.data}>
-            {(data) => data ? (
-              <DashboardContent
-                data={data}
-                activeTab={activeTab}
-                activeTimer={activeTimer}
-                googleConnected={googleConnected}
-                onStart={startTimer}
-                onStop={stopTimer}
-                isPending={isPending}
-                selectedProjectId={selectedProjectId}
-                onSelectProject={setSelectedProjectId}
-              />
-            ) : (
-              <ContentSkeleton />
-            )}
-          </Await>
-        </Suspense>
-      </SidebarInset>
-    </SidebarProvider>
-  );
-}
+        {/* CONTENT + TIMER PANEL */}
+        <div className="flex flex-1 items-start">
+          {/* SCROLLABLE CONTENT */}
+          <div className="flex-1 p-6">
+            <Suspense fallback={<ContentSkeleton />}>
+              <Await resolve={loaderData.data}>
+                {(data) => {
+                  if (!data) return <ContentSkeleton />;
+                  return (
+                    <>
+                      {data.pendingApprovals?.length > 0 && (
+                        <div className="mb-5">
+                          <PendingApprovals approvals={data.pendingApprovals} />
+                        </div>
+                      )}
 
-function ProjectListSkeleton() {
-  return (
-    <SidebarGroup>
-      <SidebarGroupLabel>Your Projects</SidebarGroupLabel>
-      <SidebarGroupContent>
-        <SidebarMenu>
-          {[1, 2, 3].map((i) => (
-            <SidebarMenuItem key={i}>
-              <SidebarMenuButton className="min-w-0">
-                <Skeleton className="h-4 w-4 rounded" />
-                <Skeleton className="h-4 flex-1" />
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-          ))}
-        </SidebarMenu>
-      </SidebarGroupContent>
-    </SidebarGroup>
-  );
-}
+                      {/* BASECAMP TAB */}
+                      {activeTab === "basecamp" && (
+                        <>
+                          {data.projects.length === 0 ? (
+                            <EmptyState
+                              icon={CheckCircle2}
+                              title="You're all caught up!"
+                              sub="No active assignments found in Basecamp."
+                            />
+                          ) : !selectedProjectId ? (
+                            <>
+                              <p className="text-sm font-semibold mb-1">Your Projects</p>
+                              <p className="text-xs text-muted-foreground mb-5">Click a project to see your assigned tasks.</p>
+                              <div className="grid grid-cols-[repeat(auto-fill,minmax(180px,1fr))] gap-2.5">
+                                {data.projects.map(p => (
+                                  <button
+                                    key={p.id}
+                                    onClick={() => handleSelectProject(p.id)}
+                                    className="flex items-center gap-2.5 rounded-xl border bg-card p-3.5 text-left transition-all hover:-translate-y-px hover:shadow-md hover:border-muted-foreground text-sm font-medium"
+                                  >
+                                    <Briefcase className="size-3.5 text-muted-foreground shrink-0" />
+                                    <span className="flex-1 truncate">{p.name}</span>
+                                    <Badge variant="secondary" className="font-mono text-[10px] shrink-0">{p.taskCount}</Badge>
+                                  </button>
+                                ))}
+                              </div>
+                            </>
+                          ) : (
+                            <>
+                              <button
+                                onClick={() => { setSelectedProjectId(null); setTaskPage(1); }}
+                                className="mb-4 flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                              >
+                                <ChevronLeft className="size-3.5" />
+                                All Projects
+                              </button>
+                              <p className="text-sm font-semibold mb-1">
+                                {data.projects.find(p => p.id === selectedProjectId)?.name}
+                              </p>
+                              <p className="text-xs text-muted-foreground mb-5">Select a task to start tracking.</p>
+                              {isLoadingTasks ? (
+                                <ContentSkeleton />
+                              ) : (selectedProjectTasks ?? []).length === 0 ? (
+                                <EmptyState icon={CheckCircle2} title="No tasks" sub="No active tasks in this project." />
+                              ) : (() => {
+                                const tasks = selectedProjectTasks ?? [];
+                                const totalPages = Math.ceil(tasks.length / TASKS_PER_PAGE);
+                                const paginated = tasks.slice((taskPage - 1) * TASKS_PER_PAGE, taskPage * TASKS_PER_PAGE);
+                                const projectName = data.projects.find(p => p.id === selectedProjectId)?.name ?? "";
+                                return (
+                                  <>
+                                    <div className="flex flex-col gap-2.5">
+                                      {paginated.map((task: GroupedTask) => (
+                                        <BasecampTaskCard
+                                          key={task.id}
+                                          task={task}
+                                          projectId={selectedProjectId!}
+                                          projectName={projectName}
+                                          activeTimer={activeTimer}
+                                          onStart={startTimer}
+                                          onStop={stopTimer}
+                                          isPending={isPending}
+                                        />
+                                      ))}
+                                    </div>
+                                    {totalPages > 1 && (
+                                      <div className="flex items-center justify-between mt-5 pt-4 border-t">
+                                        <span className="text-xs text-muted-foreground font-mono">
+                                          {(taskPage - 1) * TASKS_PER_PAGE + 1}–{Math.min(taskPage * TASKS_PER_PAGE, tasks.length)} of {tasks.length}
+                                        </span>
+                                        <div className="flex items-center gap-1">
+                                          <Button
+                                            variant="outline"
+                                            size="icon"
+                                            className="size-7"
+                                            disabled={taskPage === 1}
+                                            onClick={() => setTaskPage(p => p - 1)}
+                                          >
+                                            <ChevronLeft className="size-3.5" />
+                                          </Button>
+                                          <span className="px-2 text-xs font-mono text-muted-foreground">
+                                            {taskPage} / {totalPages}
+                                          </span>
+                                          <Button
+                                            variant="outline"
+                                            size="icon"
+                                            className="size-7"
+                                            disabled={taskPage === totalPages}
+                                            onClick={() => setTaskPage(p => p + 1)}
+                                          >
+                                            <ChevronRight className="size-3.5" />
+                                          </Button>
+                                        </div>
+                                      </div>
+                                    )}
+                                  </>
+                                );
+                              })()}
+                            </>
+                          )}
+                        </>
+                      )}
 
-function ContentSkeleton() {
-  return (
-    <div className="flex-1 p-6">
-      <div className="max-w-6xl mx-auto w-full">
-        <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 items-start">
-          <div className="xl:col-span-2 space-y-4">
-            <Card className="shadow-sm">
-              <CardHeader>
-                <Skeleton className="h-5 w-32" />
-                <Skeleton className="h-4 w-64 mt-1" />
-              </CardHeader>
-              <CardContent className="grid gap-3">
-                {[1, 2, 3, 4].map((i) => (
-                  <div key={i} className="p-4 rounded-xl border flex gap-4 items-center">
-                    <Skeleton className="h-4 w-4 shrink-0" />
-                    <Skeleton className="h-4 flex-1" />
-                    <Skeleton className="h-8 w-24 shrink-0 rounded-md" />
-                  </div>
-                ))}
-              </CardContent>
-            </Card>
+                      {/* CALENDAR TAB */}
+                      {activeTab === "calendar" && (
+                        <>
+                          {!googleConnected ? (
+                            <EmptyState
+                              icon={Calendar}
+                              title="Google Calendar not connected"
+                              sub="Connect your Google account in Settings to see your calendar events here."
+                            />
+                          ) : data.calendarEvents.length === 0 ? (
+                            <EmptyState icon={Calendar} title="No events today" sub="No calendar events scheduled for today." />
+                          ) : (
+                            <>
+                              <p className="text-sm font-semibold mb-1">Today's Events</p>
+                              <p className="text-xs text-muted-foreground mb-5">Select an event and choose a Basecamp project to start tracking.</p>
+                              <div className="flex flex-col gap-2.5">
+                                {data.calendarEvents.map((event: GoogleCalendarEvent) => (
+                                  <GoogleEventCard
+                                    key={event.id}
+                                    item={event}
+                                    source="GOOGLE_CALENDAR"
+                                    projects={data.timesheetProjects}
+                                    isActive={activeTimer?.todoId === event.id}
+                                    onStart={startTimer}
+                                    onStop={stopTimer}
+                                    isPending={isPending}
+                                  />
+                                ))}
+                              </div>
+                            </>
+                          )}
+                        </>
+                      )}
+
+                      {/* TASKS TAB */}
+                      {activeTab === "tasks" && (
+                        <>
+                          {!googleConnected ? (
+                            <EmptyState
+                              icon={ListTodo}
+                              title="Google Tasks not connected"
+                              sub="Connect your Google account in Settings to see your tasks here."
+                            />
+                          ) : data.googleTasks.length === 0 ? (
+                            <EmptyState icon={ListTodo} title="No pending tasks" sub="No pending tasks in Google Tasks." />
+                          ) : (
+                            <>
+                              <p className="text-sm font-semibold mb-1">Google Tasks</p>
+                              <p className="text-xs text-muted-foreground mb-5">Select a task and choose a Basecamp project to start tracking.</p>
+                              <div className="flex flex-col gap-2.5">
+                                {data.googleTasks.map((task: GoogleTask) => (
+                                  <GoogleEventCard
+                                    key={task.id}
+                                    item={task}
+                                    source="GOOGLE_TASKS"
+                                    projects={data.timesheetProjects}
+                                    isActive={activeTimer?.todoId === task.id}
+                                    onStart={startTimer}
+                                    onStop={stopTimer}
+                                    isPending={isPending}
+                                  />
+                                ))}
+                              </div>
+                            </>
+                          )}
+                        </>
+                      )}
+                    </>
+                  );
+                }}
+              </Await>
+            </Suspense>
           </div>
-          <div className="xl:col-span-1">
-            <Card>
-              <CardHeader>
-                <Skeleton className="h-4 w-24" />
-              </CardHeader>
-              <CardContent className="flex flex-col items-center py-8">
-                <Skeleton className="h-10 w-10 rounded-full mb-4" />
-                <Skeleton className="h-4 w-32" />
-                <Skeleton className="h-3 w-48 mt-1" />
-              </CardContent>
-            </Card>
+
+          {/* RIGHT TIMER PANEL — sticky so it stays in view while content scrolls */}
+          <div className="sticky top-13 h-[calc(100vh-52px)] shrink-0">
+            <TimerPanel activeTimer={activeTimer} elapsed={elapsed} onStop={stopTimer} isPending={isPending} />
           </div>
         </div>
-      </div>
-    </div>
-  );
-}
-
-function ProjectList({ data, activeTab, selectedProjectId, onSelectProject }: {
-  data: AppData;
-  activeTab: string;
-  selectedProjectId: string | null;
-  onSelectProject: (id: string) => void;
-}) {
-  const effectiveSelected = selectedProjectId ?? data.groupedAssignments[0]?.projectId ?? null;
-
-  if (activeTab !== "basecamp") return null;
-
-  return (
-    <SidebarGroup>
-      <SidebarGroupLabel>Your Projects</SidebarGroupLabel>
-      <SidebarGroupContent>
-        <SidebarMenu>
-          {data.groupedAssignments.map((project: GroupedAssignment) => {
-            const isSelected = project.projectId === effectiveSelected;
-            return (
-              <SidebarMenuItem key={project.projectId}>
-                <SidebarMenuButton
-                  isActive={isSelected}
-                  onClick={() => onSelectProject(project.projectId)}
-                  className="min-w-0"
-                >
-                  <Briefcase className="w-4 h-4 shrink-0" />
-                  <span title={project.projectName}>{project.projectName}</span>
-                </SidebarMenuButton>
-                <SidebarMenuBadge>{project.tasks.length}</SidebarMenuBadge>
-              </SidebarMenuItem>
-            );
-          })}
-        </SidebarMenu>
-      </SidebarGroupContent>
-    </SidebarGroup>
-  );
-}
-
-function DashboardContent({ data, activeTab, activeTimer, googleConnected, onStart, onStop, isPending, selectedProjectId, onSelectProject }: {
-  data: AppData;
-  activeTab: string;
-  activeTimer: any;
-  googleConnected: boolean;
-  onStart: (data: StartTimerData) => void;
-  onStop: () => void;
-  isPending: boolean;
-  selectedProjectId: string | null;
-  onSelectProject: (id: string) => void;
-}) {
-  const effectiveSelected = selectedProjectId ?? data.groupedAssignments[0]?.projectId ?? null;
-
-  const selectedProject = data.groupedAssignments.find(
-    (p: GroupedAssignment) => p.projectId === effectiveSelected
-  );
-
-  return (
-    <div className="flex-1 p-6">
-      <div className="max-w-6xl mx-auto w-full">
-        {activeTab === "basecamp" ? (
-          <>
-            {data.pendingApprovals && data.pendingApprovals.length > 0 && (
-              <PendingApprovals approvals={data.pendingApprovals} />
-            )}
-            <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 items-start">
-              <div className="xl:col-span-2 space-y-6">
-                {data.groupedAssignments.length === 0 ? (
-                  <Card className="border-dashed shadow-none">
-                    <CardContent className="flex flex-col items-center justify-center py-12 text-center">
-                      <CheckCircle2 className="w-12 h-12 text-muted-foreground mb-4" />
-                      <p className="text-lg font-medium">You're all caught up!</p>
-                      <p className="text-sm text-muted-foreground mt-1">No active assignments found in Basecamp.</p>
-                    </CardContent>
-                  </Card>
-                ) : selectedProject ? (
-                  <Card className="shadow-sm">
-                    <CardHeader>
-                      <CardTitle>Assigned Tasks</CardTitle>
-                      <CardDescription>Select a task to start tracking your time.</CardDescription>
-                    </CardHeader>
-                    <CardContent className="grid gap-3">
-                      {selectedProject.tasks.map((task: GroupedTask) => (
-                        <TaskCard
-                          key={task.id}
-                          task={task}
-                          selectedProject={selectedProject}
-                          activeTimer={activeTimer}
-                          onStart={onStart}
-                          onStop={onStop}
-                          isPending={isPending}
-                        />
-                      ))}
-                    </CardContent>
-                  </Card>
-                ) : null}
-              </div>
-              <div className="xl:col-span-1 sticky top-24">
-                <ActiveTimerCard activeTimer={activeTimer} onStop={onStop} isPending={isPending} />
-              </div>
-            </div>
-          </>
-        ) : activeTab === "calendar" ? (
-          <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 items-start">
-            <div className="xl:col-span-2 space-y-6">
-              {!googleConnected ? (
-                <Card className="border-dashed shadow-none">
-                  <CardContent className="flex flex-col items-center justify-center py-12 text-center">
-                    <Calendar className="w-12 h-12 text-muted-foreground mb-4" />
-                    <p className="text-lg font-medium">Google Calendar not connected</p>
-                    <p className="text-sm text-muted-foreground mt-1">
-                      Connect your Google account in Settings to see your calendar events here.
-                    </p>
-                  </CardContent>
-                </Card>
-              ) : data.calendarEvents.length === 0 ? (
-                <Card className="border-dashed shadow-none">
-                  <CardContent className="flex flex-col items-center justify-center py-12 text-center">
-                    <Calendar className="w-12 h-12 text-muted-foreground mb-4" />
-                    <p className="text-lg font-medium">No events today</p>
-                    <p className="text-sm text-muted-foreground mt-1">You have no calendar events scheduled for today.</p>
-                  </CardContent>
-                </Card>
-              ) : (
-                <Card className="shadow-sm">
-                  <CardHeader>
-                    <CardTitle>Today's Events</CardTitle>
-                    <CardDescription>Select an event and pick a Basecamp project to start tracking.</CardDescription>
-                  </CardHeader>
-                  <CardContent className="grid gap-3">
-                    {data.calendarEvents.map((event: GoogleCalendarEvent) => (
-                      <GoogleItemCard
-                        key={event.id}
-                        item={event}
-                        source="GOOGLE_CALENDAR"
-                        projects={data.timesheetProjects}
-                        isActive={activeTimer?.todoId === event.id}
-                        onStart={onStart}
-                        onStop={onStop}
-                        isPending={isPending}
-                      />
-                    ))}
-                  </CardContent>
-                </Card>
-              )}
-            </div>
-            <div className="xl:col-span-1 sticky top-24">
-              <ActiveTimerCard activeTimer={activeTimer} onStop={onStop} isPending={isPending} />
-            </div>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 items-start">
-            <div className="xl:col-span-2 space-y-6">
-              {!googleConnected ? (
-                <Card className="border-dashed shadow-none">
-                  <CardContent className="flex flex-col items-center justify-center py-12 text-center">
-                    <ListTodo className="w-12 h-12 text-muted-foreground mb-4" />
-                    <p className="text-lg font-medium">Google Tasks not connected</p>
-                    <p className="text-sm text-muted-foreground mt-1">
-                      Connect your Google account in Settings to see your tasks here.
-                    </p>
-                  </CardContent>
-                </Card>
-              ) : data.googleTasks.length === 0 ? (
-                <Card className="border-dashed shadow-none">
-                  <CardContent className="flex flex-col items-center justify-center py-12 text-center">
-                    <ListTodo className="w-12 h-12 text-muted-foreground mb-4" />
-                    <p className="text-lg font-medium">No pending tasks</p>
-                    <p className="text-sm text-muted-foreground mt-1">You have no pending tasks in Google Tasks.</p>
-                  </CardContent>
-                </Card>
-              ) : (
-                <Card className="shadow-sm">
-                  <CardHeader>
-                    <CardTitle>Google Tasks</CardTitle>
-                    <CardDescription>Select a task and pick a Basecamp project to start tracking.</CardDescription>
-                  </CardHeader>
-                  <CardContent className="grid gap-3">
-                    {data.googleTasks.map((task: GoogleTask) => (
-                      <GoogleItemCard
-                        key={task.id}
-                        item={task}
-                        source="GOOGLE_TASKS"
-                        projects={data.timesheetProjects}
-                        isActive={activeTimer?.todoId === task.id}
-                        onStart={onStart}
-                        onStop={onStop}
-                        isPending={isPending}
-                      />
-                    ))}
-                  </CardContent>
-                </Card>
-              )}
-            </div>
-            <div className="xl:col-span-1 sticky top-24">
-              <ActiveTimerCard activeTimer={activeTimer} onStop={onStop} isPending={isPending} />
-            </div>
-          </div>
-        )}
-      </div>
-    </div>
+      </SidebarInset>
+    </SidebarProvider>
   );
 }
