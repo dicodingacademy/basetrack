@@ -1,5 +1,5 @@
 import { useState, useEffect, Suspense } from "react";
-import { Form, Await } from "react-router";
+import { Form, Await, useFetcher } from "react-router";
 
 import type { Route } from "./+types/home";
 import { getSession, getUserFromSessionId } from "../utils/session.server";
@@ -32,6 +32,7 @@ import {
   SidebarMenuItem,
   SidebarProvider,
   SidebarInset,
+  SidebarSeparator,
   SidebarTrigger,
 } from "../components/ui/sidebar";
 
@@ -53,6 +54,7 @@ import {
   CheckCircle2,
   ArrowRight,
   LogOut,
+  History,
 } from "lucide-react";
 
 import type { BasecampAssignment, GroupedTask } from "../types/basecamp";
@@ -68,6 +70,11 @@ type AppData = {
   googleTasks: GoogleTask[];
 };
 
+export function shouldRevalidate({ formAction }: { formAction?: string }) {
+  if (formAction?.startsWith("/api/")) return false;
+  return true;
+}
+
 export function meta(_args: Route.MetaArgs) {
   return [
     { title: "Basetrack - Basecamp Time Tracker" },
@@ -82,12 +89,7 @@ async function loadData(user: any): Promise<AppData> {
     const accessToken = await getValidAccessToken(user.id);
     const rawAssignments = await fetchAssignments(user.basecampAccountId, accessToken);
 
-    let items: BasecampAssignment[] = [];
-    if (Array.isArray(rawAssignments)) {
-      items = rawAssignments;
-    } else {
-      items = [...(rawAssignments.priorities || []), ...(rawAssignments.non_priorities || [])];
-    }
+    const items: BasecampAssignment[] = rawAssignments;
 
     const counts: Record<string, { name: string; count: number }> = {};
     for (const curr of items) {
@@ -515,6 +517,211 @@ function TimerPanel({ activeTimer, elapsed, onStop, isPending }: {
   );
 }
 
+// ── HISTORY PANEL ────────────────────────────────────────────────────────
+
+function HistoryPanel() {
+  const fetcher = useFetcher<{ entries: any[]; total: number; page: number; pageSize: number }>();
+  const retryFetcher = useFetcher<{ success: boolean; syncError?: string }>();
+  const [status, setStatus] = useState("all");
+  const [source, setSource] = useState("all");
+  const [page, setPage] = useState(1);
+  const [datePreset, setDatePreset] = useState<"7" | "30" | "90">("30");
+  const [retryingId, setRetryingId] = useState<string | null>(null);
+
+  const loadEntries = (overrides?: { status?: string; source?: string; page?: number; datePreset?: string }) => {
+    const s = overrides?.status ?? status;
+    const src = overrides?.source ?? source;
+    const p = overrides?.page ?? page;
+    const d = overrides?.datePreset ?? datePreset;
+    const from = new Date();
+    from.setDate(from.getDate() - parseInt(d));
+    const fromStr = from.toISOString().split("T")[0];
+    fetcher.load(`/api/time-entries?page=${p}&status=${s}&source=${src}&from=${fromStr}`);
+  };
+
+  useEffect(() => { loadEntries(); }, [status, source, page, datePreset]);
+
+  useEffect(() => {
+    if (retryFetcher.state === "idle" && retryingId !== null) {
+      setRetryingId(null);
+      loadEntries();
+    }
+  }, [retryFetcher.state]);
+
+  const handleRetry = (entryId: string) => {
+    setRetryingId(entryId);
+    retryFetcher.submit({ entryId }, { method: "post", action: "/api/time-entries/retry" });
+  };
+
+  const entries: any[] = fetcher.data?.entries ?? [];
+  const total = fetcher.data?.total ?? 0;
+  const pageSize = fetcher.data?.pageSize ?? 20;
+  const totalPages = Math.ceil(total / pageSize);
+
+  const grouped: Record<string, any[]> = {};
+  for (const e of entries) {
+    const key = new Date(e.startedAt).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+    if (!grouped[key]) grouped[key] = [];
+    grouped[key].push(e);
+  }
+
+  const fmtDuration = (sec: number) => {
+    const h = Math.floor(sec / 3600);
+    const m = Math.floor((sec % 3600) / 60);
+    return h > 0 ? `${h}h ${m}m` : `${m}m`;
+  };
+
+  const sourceBar: Record<string, string> = {
+    BASECAMP: "bg-primary",
+    GOOGLE_CALENDAR: "bg-blue-500",
+    GOOGLE_TASKS: "bg-emerald-500",
+  };
+
+  const statusStyle: Record<string, string> = {
+    SYNCED: "bg-emerald-500/15 text-emerald-400",
+    FAILED: "bg-destructive/15 text-destructive",
+    NEEDS_APPROVAL: "bg-primary/15 text-primary",
+    PENDING: "bg-yellow-500/15 text-yellow-400",
+  };
+
+  const statusLabel: Record<string, string> = {
+    SYNCED: "Synced",
+    FAILED: "Failed",
+    NEEDS_APPROVAL: "Needs Approval",
+    PENDING: "Pending",
+  };
+
+  const selectClass = "h-8 rounded-lg border border-border bg-card px-2.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary";
+
+  return (
+    <div>
+      <p className="text-sm font-semibold mb-1">Time Tracking History</p>
+      <p className="text-xs text-muted-foreground mb-5">Your logged time entries across all sources.</p>
+
+      {/* Filter bar */}
+      <div className="flex flex-wrap items-center gap-2 mb-5">
+        <div className="flex rounded-lg border overflow-hidden text-xs">
+          {(["7", "30", "90"] as const).map(d => (
+            <button
+              key={d}
+              onClick={() => { setDatePreset(d); setPage(1); loadEntries({ datePreset: d, page: 1 }); }}
+              className={cn(
+                "px-3 py-1.5 transition-colors",
+                datePreset === d ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"
+              )}
+            >
+              {d}d
+            </button>
+          ))}
+        </div>
+        <select value={status} onChange={e => { setStatus(e.target.value); setPage(1); loadEntries({ status: e.target.value, page: 1 }); }} className={selectClass}>
+          <option value="all">All status</option>
+          <option value="synced">Synced</option>
+          <option value="needs_approval">Needs Approval</option>
+          <option value="pending">Pending</option>
+          <option value="failed">Failed</option>
+        </select>
+        <select value={source} onChange={e => { setSource(e.target.value); setPage(1); loadEntries({ source: e.target.value, page: 1 }); }} className={selectClass}>
+          <option value="all">All sources</option>
+          <option value="basecamp">Basecamp</option>
+          <option value="calendar">Google Calendar</option>
+          <option value="tasks">Google Tasks</option>
+        </select>
+        {total > 0 && (
+          <span className="ml-auto text-xs text-muted-foreground font-mono">{total} entries</span>
+        )}
+      </div>
+
+      {fetcher.state === "loading" && <ContentSkeleton />}
+
+      {fetcher.state !== "loading" && entries.length === 0 && (
+        <EmptyState icon={History} title="No time entries" sub="No entries found for the selected filters." />
+      )}
+
+      {fetcher.state !== "loading" && entries.length > 0 && (
+        <div className="flex flex-col gap-5">
+          {Object.entries(grouped).map(([date, items]) => (
+            <div key={date}>
+              <p className="text-[10.5px] font-semibold tracking-wider uppercase text-muted-foreground mb-2">{date}</p>
+              <div className="flex flex-col gap-2">
+                {items.map((e: any) => {
+                  const isTooShort = e.syncStatus === "FAILED" && e.durationSec < 60;
+                  const isRetryable = e.syncStatus === "FAILED" && e.durationSec >= 60;
+                  const isRetrying = retryingId === e.id;
+                  return (
+                    <div key={e.id} className="rounded-xl border bg-card overflow-hidden">
+                      <div className="flex items-stretch">
+                        <div className={cn("w-1 shrink-0", sourceBar[e.source] ?? "bg-muted-foreground")} />
+                        <div className="flex flex-1 items-center gap-3.5 px-4 py-3 min-w-0">
+                          <div className="w-16 shrink-0">
+                            <p className="font-mono text-[13px] font-medium text-foreground leading-none">
+                              {new Date(e.startedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                            </p>
+                            <p className="text-[10px] text-muted-foreground mt-0.5">{fmtDuration(e.durationSec)}</p>
+                          </div>
+                          <div className="w-px h-7 bg-border shrink-0" />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-[13px] font-medium truncate text-foreground">{e.todoTitle}</p>
+                            <p className="text-[11px] text-muted-foreground truncate">{e.projectName}</p>
+                          </div>
+                          <div className="flex items-center gap-2 shrink-0">
+                            {isTooShort ? (
+                              <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-muted text-muted-foreground whitespace-nowrap" title="Duration too short for Basecamp sync">
+                                Too short
+                              </span>
+                            ) : (
+                              <span className={cn("text-[10px] font-medium px-2 py-0.5 rounded-full whitespace-nowrap", statusStyle[e.syncStatus] ?? "bg-muted text-muted-foreground")}>
+                                {statusLabel[e.syncStatus] ?? e.syncStatus}
+                              </span>
+                            )}
+                            {isRetryable && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-6 px-2 text-[11px]"
+                                disabled={isRetrying}
+                                onClick={() => handleRetry(e.id)}
+                              >
+                                {isRetrying ? "Syncing…" : "Retry"}
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                      {e.syncError && !isTooShort && (
+                        <div className="px-5 pb-2.5 ml-1">
+                          <p className="text-[10.5px] text-destructive leading-snug">{e.syncError}</p>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between mt-5 pt-4 border-t">
+          <span className="text-xs text-muted-foreground font-mono">
+            {(page - 1) * pageSize + 1}–{Math.min(page * pageSize, total)} of {total}
+          </span>
+          <div className="flex items-center gap-1">
+            <Button variant="outline" size="icon" className="size-7" disabled={page === 1} onClick={() => setPage(p => p - 1)}>
+              <ChevronLeft className="size-3.5" />
+            </Button>
+            <span className="px-2 text-xs font-mono text-muted-foreground">{page} / {totalPages}</span>
+            <Button variant="outline" size="icon" className="size-7" disabled={page === totalPages} onClick={() => setPage(p => p + 1)}>
+              <ChevronRight className="size-3.5" />
+            </Button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── MAIN COMPONENT ───────────────────────────────────────────────────────
 
 export default function Home({ loaderData }: Route.ComponentProps) {
@@ -522,7 +729,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 
   const TASKS_PER_PAGE = 8;
 
-  const [activeTab, setActiveTab] = useState<"basecamp" | "calendar" | "tasks">("basecamp");
+  const [activeTab, setActiveTab] = useState<"basecamp" | "calendar" | "tasks" | "history">("basecamp");
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [tasksCache, setTasksCache] = useState<Record<string, GroupedTask[]>>({});
   const [isLoadingTasks, setIsLoadingTasks] = useState(false);
@@ -616,8 +823,8 @@ export default function Home({ loaderData }: Route.ComponentProps) {
                     onClick={() => setActiveTab("basecamp")}
                     tooltip="Basecamp"
                   >
-                    <Briefcase className="size-4" />
-                    <span>Basecamp</span>
+                    <Briefcase className="size-4 shrink-0" />
+                    <span className="truncate">Basecamp</span>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
                 <SidebarMenuItem>
@@ -626,8 +833,8 @@ export default function Home({ loaderData }: Route.ComponentProps) {
                     onClick={() => setActiveTab("calendar")}
                     tooltip="Calendar"
                   >
-                    <Calendar className="size-4" />
-                    <span>Calendar</span>
+                    <Calendar className="size-4 shrink-0" />
+                    <span className="truncate">Calendar</span>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
                 <SidebarMenuItem>
@@ -636,8 +843,27 @@ export default function Home({ loaderData }: Route.ComponentProps) {
                     onClick={() => setActiveTab("tasks")}
                     tooltip="Google Tasks"
                   >
-                    <ListTodo className="size-4" />
-                    <span>Tasks</span>
+                    <ListTodo className="size-4 shrink-0" />
+                    <span className="truncate">Tasks</span>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+
+          <SidebarSeparator />
+
+          <SidebarGroup>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    isActive={activeTab === "history"}
+                    onClick={() => setActiveTab("history")}
+                    tooltip="History"
+                  >
+                    <History className="size-4 shrink-0" />
+                    <span className="truncate">History</span>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               </SidebarMenu>
@@ -647,7 +873,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
           {/* Project list only visible in Basecamp tab */}
           <Suspense fallback={
             <SidebarGroup>
-              <SidebarGroupLabel>Projects</SidebarGroupLabel>
+              <SidebarGroupLabel>Project Assignments</SidebarGroupLabel>
               <SidebarGroupContent>
                 <SidebarMenu>
                   {[1,2,3].map(i => (
@@ -665,7 +891,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
             <Await resolve={loaderData.data}>
               {(data) => data && activeTab === "basecamp" ? (
                 <SidebarGroup>
-                  <SidebarGroupLabel>Projects</SidebarGroupLabel>
+                  <SidebarGroupLabel>Project Assignments</SidebarGroupLabel>
                   <SidebarGroupContent>
                     <SidebarMenu>
                       {data.projects.map((p) => (
@@ -674,6 +900,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
                             isActive={p.id === selectedProjectId}
                             onClick={() => handleSelectProject(p.id)}
                             tooltip={p.name}
+                            className="pr-7"
                           >
                             <Briefcase className="size-4 shrink-0" />
                             <span className="truncate">{p.name}</span>
@@ -733,7 +960,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
         <header className="sticky top-0 z-10 flex h-13 shrink-0 items-center gap-2 border-b bg-background/95 backdrop-blur-sm px-4">
           <SidebarTrigger className="-ml-1" />
           <div className="w-px h-4 bg-border" />
-          <span className="text-xs text-muted-foreground">Source /</span>
+          <span className="text-xs text-muted-foreground">{activeTab === "history" ? "Logs /" : "Source /"}</span>
           <span className="text-sm font-semibold capitalize">{activeTab}</span>
           <div className="w-px h-4 bg-border" />
           <span className="font-mono text-xs text-muted-foreground">{today}</span>
@@ -757,6 +984,9 @@ export default function Home({ loaderData }: Route.ComponentProps) {
         <div className="flex flex-1 items-start">
           {/* SCROLLABLE CONTENT */}
           <div className="flex-1 p-6">
+            {activeTab === "history" ? (
+              <HistoryPanel />
+            ) : (
             <Suspense fallback={<ContentSkeleton />}>
               <Await resolve={loaderData.data}>
                 {(data) => {
@@ -944,6 +1174,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
                 }}
               </Await>
             </Suspense>
+            )}
           </div>
 
           {/* RIGHT TIMER PANEL — sticky so it stays in view while content scrolls */}
