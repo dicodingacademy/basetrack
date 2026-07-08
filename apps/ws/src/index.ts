@@ -131,8 +131,11 @@ wss.on("connection", (ws) => {
         console.log(`Timer stopped for user ${userId}, duration: ${durationSec}s`);
 
         let syncStatus: "SYNCED" | "FAILED" | "NEEDS_APPROVAL" = "FAILED";
+        let syncError: string | null = null;
 
-        if (durationSec >= 60) {
+        if (durationSec < 60) {
+          syncError = "Duration too short (minimum 60 s for Basecamp)";
+        } else {
           try {
             const accessToken = await getValidAccessToken(userId, prisma);
             const yyyy = stoppedAt.getFullYear();
@@ -149,23 +152,17 @@ wss.on("connection", (ws) => {
             if (activeTimer.source === "BASECAMP") {
               recordingId = activeTimer.todoId;
             } else {
-              // For non-Basecamp sources, log time at the project level.
-              // The recording ID is discoverable from existing project-level timesheet entries.
               const found = await getProjectTimesheetRecordingId(
                 user.basecampAccountId,
                 activeTimer.projectId,
                 accessToken
               );
               if (!found) {
-                // Basecamp API limitation: the project-level timesheet recording ID
-                // is only discoverable from existing project-level entries. This project
-                // has none yet. User must manually log one entry in Basecamp first.
                 console.warn(
                   `[SYNC] Project ${activeTimer.projectId} has no project-level timesheet entries. ` +
-                  `Basecamp recording ID cannot be discovered. ` +
                   `Log at least one project-level time entry manually in Basecamp to enable auto-sync.`
                 );
-                syncStatus = "FAILED";
+                syncError = "Project has no timesheet recording in Basecamp. Log a project-level time entry manually first.";
                 throw new Error("bootstrap");
               }
               recordingId = found;
@@ -176,6 +173,7 @@ wss.on("connection", (ws) => {
           } catch (err: any) {
             if (err?.message !== "bootstrap") {
               console.error("Failed to sync timesheet entry:", err);
+              syncError = (err as Error).message || "Basecamp sync failed";
             }
           }
         }
@@ -192,6 +190,7 @@ wss.on("connection", (ws) => {
             durationSec,
             stopReason: "MANUAL",
             syncStatus,
+            syncError,
             source: activeTimer.source,
           },
         });
