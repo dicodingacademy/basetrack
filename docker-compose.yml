@@ -74,7 +74,9 @@ services:
       PORT: "8081"
       DATABASE_URL: postgresql://${DB_USER:-basetrack}:${DB_PASSWORD:-password}@db:5432/${DB_NAME:-basetrack}?schema=public
       INTERNAL_API_KEY: ${INTERNAL_API_KEY}
-      TRACKER_INTERNAL_URL: http://tracker:3000/api/internal/stop
+      BASECAMP_CLIENT_ID: ${BASECAMP_CLIENT_ID}
+      BASECAMP_CLIENT_SECRET: ${BASECAMP_CLIENT_SECRET}
+      BASECAMP_REDIRECT_URI: ${BASECAMP_REDIRECT_URI}
     depends_on:
       db:
         condition: service_healthy

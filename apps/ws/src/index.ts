@@ -4,6 +4,11 @@ import express from "express";
 import { PrismaClient } from "@prisma/client";
 import { createServer } from "node:http";
 import { timingSafeEqual } from "node:crypto";
+import {
+  getValidAccessToken,
+  createTimesheetEntry,
+  getProjectTimesheetRecordingId,
+} from "./basecamp.js";
 
 const prisma = new PrismaClient();
 const app = express();
@@ -26,13 +31,21 @@ const wss = new WebSocketServer({ server });
 
 const activeClients = new Map<WebSocket, string>();
 
+function broadcastToUser(userId: string, event: object) {
+  for (const [ws, uid] of activeClients) {
+    if (uid === userId && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify(event));
+    }
+  }
+}
+
 wss.on("connection", (ws) => {
   let isAuthenticated = false;
 
   ws.on("message", async (data) => {
     try {
       const message = JSON.parse(data.toString());
-      
+
       if (message.type === "AUTH") {
         const apiKey = message.apiKey;
         if (!apiKey || typeof apiKey !== "string") {
@@ -41,9 +54,7 @@ wss.on("connection", (ws) => {
           return;
         }
 
-        const user = await prisma.user.findUnique({
-          where: { apiKey: apiKey }
-        });
+        const user = await prisma.user.findUnique({ where: { apiKey } });
 
         if (!user) {
           ws.send(JSON.stringify({ type: "ERROR", message: "Invalid API Key" }));
@@ -56,51 +67,134 @@ wss.on("connection", (ws) => {
         ws.send(JSON.stringify({ type: "AUTH_SUCCESS", message: "Authenticated successfully" }));
         console.log(`WebSocket authenticated for user ${user.id}`);
 
-        const activeTimer = await prisma.activeTimer.findUnique({
-          where: { userId: user.id }
-        });
-        
+        const activeTimer = await prisma.activeTimer.findUnique({ where: { userId: user.id } });
         if (activeTimer) {
           ws.send(JSON.stringify({ type: "TIMER_STARTED", timer: activeTimer, isInitialSync: true }));
         } else {
           ws.send(JSON.stringify({ type: "TIMER_STOPPED", isInitialSync: true }));
         }
-      } else if (message.type === "STOP_TIMER") {
-        if (!isAuthenticated) return;
-        
-        const connectedUserId = activeClients.get(ws);
-        if (!connectedUserId) return;
 
-        const user = await prisma.user.findUnique({
-          where: { id: connectedUserId }
-        });
-        
-        if (!user || user.apiKey !== message.apiKey) {
-          console.warn(`Unauthorized STOP_TIMER attempt on ws for user ${connectedUserId}`);
+      } else if (message.type === "START_TIMER") {
+        if (!isAuthenticated) return;
+        const userId = activeClients.get(ws);
+        if (!userId) return;
+
+        const { todoId, todoTitle, projectId, projectName, source } = message;
+
+        if (!todoId || !todoTitle || !projectId || !projectName) {
+          ws.send(JSON.stringify({ type: "TIMER_ERROR", code: "INVALID_DATA", message: "Missing required fields" }));
           return;
         }
 
-        const activeTimer = await prisma.activeTimer.findUnique({
-          where: { userId: user.id }
-        });
+        try {
+          await prisma.activeTimer.deleteMany({ where: { userId } });
+          const newTimer = await prisma.activeTimer.create({
+            data: {
+              userId,
+              todoId,
+              todoTitle,
+              projectId,
+              projectName,
+              source: source || "BASECAMP",
+            },
+          });
+          broadcastToUser(userId, { type: "TIMER_STARTED", timer: newTimer });
+          console.log(`Timer started for user ${userId}: ${todoTitle}`);
+        } catch (err) {
+          console.error("Failed to start timer:", err);
+          ws.send(JSON.stringify({ type: "TIMER_ERROR", code: "START_FAILED", message: "Failed to start timer" }));
+        }
 
-        if (activeTimer) {
-          const trackerUrl = process.env.TRACKER_INTERNAL_URL || "http://localhost:5173/api/internal/stop";
-          const internalKey = process.env.INTERNAL_API_KEY || "dev-internal-key-123";
+      } else if (message.type === "STOP_TIMER") {
+        if (!isAuthenticated) return;
+        const userId = activeClients.get(ws);
+        if (!userId) return;
 
+        const user = await prisma.user.findUnique({ where: { id: userId } });
+        if (!user) return;
+
+        const activeTimer = await prisma.activeTimer.findUnique({ where: { userId } });
+
+        if (!activeTimer) {
+          ws.send(JSON.stringify({ type: "TIMER_STOPPED" }));
+          return;
+        }
+
+        const stoppedAt = new Date();
+        const durationSec = Math.floor((stoppedAt.getTime() - activeTimer.startedAt.getTime()) / 1000);
+        const durationHours = durationSec / 3600;
+
+        await prisma.activeTimer.delete({ where: { userId } });
+
+        // Broadcast immediately — UI doesn't wait for Basecamp sync
+        broadcastToUser(userId, { type: "TIMER_STOPPED" });
+        console.log(`Timer stopped for user ${userId}, duration: ${durationSec}s`);
+
+        let syncStatus: "SYNCED" | "FAILED" | "NEEDS_APPROVAL" = "FAILED";
+
+        if (durationSec >= 60) {
           try {
-            await fetch(trackerUrl, {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                "x-internal-key": internalKey,
-              },
-              body: JSON.stringify({ userId: user.id, basecampId: user.basecampAccountId }),
-            });
-          } catch (err) {
-            console.error("Failed to call internal stop API:", err);
+            const accessToken = await getValidAccessToken(userId, prisma);
+            const yyyy = stoppedAt.getFullYear();
+            const mm = String(stoppedAt.getMonth() + 1).padStart(2, "0");
+            const dd = String(stoppedAt.getDate()).padStart(2, "0");
+            const payload = {
+              date: `${yyyy}-${mm}-${dd}`,
+              hours: Number(durationHours.toFixed(2)),
+              description: activeTimer.source === "BASECAMP" ? "Tracked via BaseTrack" : activeTimer.todoTitle,
+            };
+
+            let recordingId: string;
+
+            if (activeTimer.source === "BASECAMP") {
+              recordingId = activeTimer.todoId;
+            } else {
+              // For non-Basecamp sources, log time at the project level.
+              // The recording ID is discoverable from existing project-level timesheet entries.
+              const found = await getProjectTimesheetRecordingId(
+                user.basecampAccountId,
+                activeTimer.projectId,
+                accessToken
+              );
+              if (!found) {
+                // Basecamp API limitation: the project-level timesheet recording ID
+                // is only discoverable from existing project-level entries. This project
+                // has none yet. User must manually log one entry in Basecamp first.
+                console.warn(
+                  `[SYNC] Project ${activeTimer.projectId} has no project-level timesheet entries. ` +
+                  `Basecamp recording ID cannot be discovered. ` +
+                  `Log at least one project-level time entry manually in Basecamp to enable auto-sync.`
+                );
+                syncStatus = "FAILED";
+                throw new Error("bootstrap");
+              }
+              recordingId = found;
+            }
+
+            await createTimesheetEntry(user.basecampAccountId, recordingId, accessToken, payload);
+            syncStatus = "SYNCED";
+          } catch (err: any) {
+            if (err?.message !== "bootstrap") {
+              console.error("Failed to sync timesheet entry:", err);
+            }
           }
         }
+
+        await prisma.timeEntry.create({
+          data: {
+            userId,
+            todoId: activeTimer.todoId,
+            todoTitle: activeTimer.todoTitle,
+            projectId: activeTimer.projectId,
+            projectName: activeTimer.projectName,
+            startedAt: activeTimer.startedAt,
+            stoppedAt,
+            durationSec,
+            stopReason: "MANUAL",
+            syncStatus,
+            source: activeTimer.source,
+          },
+        });
       }
     } catch (e) {
       console.error("WebSocket message error:", e);
@@ -120,14 +214,14 @@ wss.on("connection", (ws) => {
 
 app.post("/internal/broadcast", (req, res) => {
   const internalKey = req.headers["x-internal-key"];
-  
+
   if (!isAuthorized(internalKey)) {
     res.status(401).json({ error: "Unauthorized" });
     return;
   }
 
   const { userId, event } = req.body;
-  
+
   if (!userId || !event) {
     res.status(400).json({ error: "Missing userId or event" });
     return;
@@ -146,7 +240,7 @@ app.post("/internal/broadcast", (req, res) => {
 
 app.post("/internal/kick", (req, res) => {
   const internalKey = req.headers["x-internal-key"];
-  
+
   if (!isAuthorized(internalKey)) {
     res.status(401).json({ error: "Unauthorized" });
     return;
