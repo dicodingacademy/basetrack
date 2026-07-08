@@ -82,6 +82,7 @@ model TimeEntry {
   durationSec     Int
   stopReason      StopReason
   syncStatus      SyncStatus
+  syncError       String?
   basecampEntryId String?
   source          String     @default("BASECAMP")
   createdAt       DateTime   @default(now())
