@@ -171,25 +171,33 @@ export async function getProjectTimesheetRecordingId(
   projectId: string,
   accessToken: string
 ): Promise<string | null> {
-  const response = await fetch(
-    `https://3.basecampapi.com/${accountId}/projects/${projectId}/timesheet.json`,
-    {
+  // Project-level timesheet entries have parent.type === "Timesheet".
+  // The timesheet tool does NOT appear in the project's dock array —
+  // we must discover its recording ID from existing project-level entries.
+  let url = `https://3.basecampapi.com/${accountId}/projects/${projectId}/timesheet.json`;
+
+  for (;;) {
+    const res: Response = await fetch(url, {
       headers: {
         Authorization: `Bearer ${accessToken}`,
         "User-Agent": "BaseTrack (app@basetrack.local)",
       },
+    });
+
+    if (!res.ok) return null;
+
+    const entries = await res.json() as { parent: { id: number; type: string } }[];
+
+    for (const entry of entries) {
+      if (entry.parent?.type === "Timesheet") {
+        return entry.parent.id.toString();
+      }
     }
-  );
 
-  if (!response.ok) return null;
-
-  const entries = await response.json() as any[];
-  if (!entries || entries.length === 0) return null;
-
-  for (const entry of entries) {
-    if (entry.parent?.type === "Timesheet") {
-      return entry.parent.id.toString();
-    }
+    const link: string | null = res.headers.get("Link");
+    const nextMatch: RegExpMatchArray | null = link ? link.match(/<([^>]+)>;\s*rel="next"/) : null;
+    if (!nextMatch) break;
+    url = nextMatch[1];
   }
 
   return null;
