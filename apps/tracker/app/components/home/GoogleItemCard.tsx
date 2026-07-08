@@ -35,7 +35,15 @@ export function GoogleItemCard({ item, source, projects, isActive, onStart, onSt
     return null;
   };
 
-  const handleStart = (project: { id: string; name: string }) => {
+  const handleSelect = async (project: { id: string; name: string }) => {
+    const res = await fetch(`/api/check-timesheet?projectId=${project.id}`);
+    const { available } = await res.json();
+    if (!available) {
+      throw new Error(
+        "Project ini belum punya time entry di Basecamp. Log minimal satu time entry manual di Basecamp untuk project ini terlebih dahulu."
+      );
+    }
+    setSelectedProject(project);
     onStart({
       todoId: item.id,
       todoTitle: displayTitle,
@@ -97,23 +105,10 @@ export function GoogleItemCard({ item, source, projects, isActive, onStart, onSt
             <Square className="w-3.5 h-3.5 mr-2 fill-current" />
             Stop
           </Button>
-        ) : selectedProject ? (
-          <Button
-            type="button"
-            size="sm"
-            disabled={isPending}
-            onClick={() => handleStart(selectedProject)}
-          >
-            <Play className="w-3.5 h-3.5 mr-2" />
-            Start Timer
-          </Button>
         ) : (
           <ProjectPickerModal
             projects={projects}
-            onSelect={(project) => {
-              setSelectedProject(project);
-              handleStart(project);
-            }}
+            onSelect={handleSelect}
           >
             <Button variant="outline" size="sm" disabled={isPending}>
               <Play className="w-3.5 h-3.5 mr-2" />
