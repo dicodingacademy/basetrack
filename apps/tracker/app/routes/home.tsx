@@ -55,7 +55,6 @@ import {
   ChevronRight,
   CheckCircle2,
   ArrowRight,
-  LogOut,
   History,
 } from "lucide-react";
 
@@ -464,17 +463,6 @@ export default function Home({ loaderData }: Route.ComponentProps) {
                     apiKey={user.apiKey}
                     googleConnected={googleConnected}
                   />
-                  <Form method="post" action="/auth/logout">
-                    <Button
-                      type="submit"
-                      variant="ghost"
-                      size="icon"
-                      className="size-8 text-muted-foreground hover:text-destructive"
-                      title="Logout"
-                    >
-                      <LogOut className="size-4" />
-                    </Button>
-                  </Form>
                 </div>
               </SidebarMenuButton>
             </SidebarMenuItem>

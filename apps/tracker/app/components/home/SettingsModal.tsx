@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useFetcher } from "react-router";
+import { useFetcher, Form } from "react-router";
 import { Button } from "../ui/button";
 import {
   Dialog,
@@ -13,7 +13,8 @@ import {
 import { Input } from "../ui/input";
 import { Label } from "../ui/label";
 import { RuleList } from "./RuleList";
-import { Settings, Loader2, CheckCircle2, XCircle } from "lucide-react";
+import { Settings, Loader2, CheckCircle2, XCircle, Sun, Moon, LogOut } from "lucide-react";
+import { useTheme } from "../../hooks/useTheme";
 import type { AutoStopRuleData } from "./types";
 
 type SettingsModalProps = {
@@ -26,6 +27,7 @@ type SettingsModalProps = {
 export function SettingsModal({ rules: initialRules, userTimezone, apiKey, googleConnected }: SettingsModalProps) {
   const [open, setOpen] = useState(false);
   const fetcher = useFetcher();
+  const { theme, toggle: toggleTheme } = useTheme();
   const [localRules, setLocalRules] = useState<AutoStopRuleData[]>(initialRules);
   const isSaving = fetcher.state !== "idle";
 
@@ -127,6 +129,31 @@ export function SettingsModal({ rules: initialRules, userTimezone, apiKey, googl
           </div>
 
           <div className="border-t pt-4">
+            <h4 className="text-sm font-medium mb-3">Appearance</h4>
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm">Theme</p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  {theme === "dark" ? "Dark mode" : "Light mode"}
+                </p>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={toggleTheme}
+                className="gap-2"
+              >
+                {theme === "dark" ? (
+                  <><Sun className="size-3.5" /> Light</>
+                ) : (
+                  <><Moon className="size-3.5" /> Dark</>
+                )}
+              </Button>
+            </div>
+          </div>
+
+          <div className="border-t pt-4">
             <h4 className="text-sm font-medium mb-3">Google Integration</h4>
             <div className="space-y-3">
               <div className="flex items-center gap-2">
@@ -174,7 +201,18 @@ export function SettingsModal({ rules: initialRules, userTimezone, apiKey, googl
             </div>
           </div>
         </div>
-        <DialogFooter>
+        <DialogFooter className="flex-row items-center">
+          <Form method="post" action="/auth/logout" className="mr-auto">
+            <Button
+              type="submit"
+              variant="ghost"
+              size="sm"
+              className="gap-2 text-muted-foreground hover:text-destructive"
+            >
+              <LogOut className="size-3.5" />
+              Sign out
+            </Button>
+          </Form>
           <Button type="button" variant="outline" onClick={() => setOpen(false)} disabled={isSaving}>
             Cancel
           </Button>
