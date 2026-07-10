@@ -66,10 +66,11 @@ export async function approveTimeEntry(
 
     await createTimesheetEntry(basecampId, recordingId, accessToken, payload);
     newStatus = "SYNCED";
-  } catch (err: any) {
-    if (err?.message !== "bootstrap") {
+  } catch (err: unknown) {
+    const errMsg = err instanceof Error ? err.message : String(err);
+    if (errMsg !== "bootstrap") {
       console.error("Failed to sync timesheet entry on approval:", err);
-      syncError = (err as Error).message || "Basecamp sync failed";
+      syncError = errMsg || "Basecamp sync failed";
     }
   }
 

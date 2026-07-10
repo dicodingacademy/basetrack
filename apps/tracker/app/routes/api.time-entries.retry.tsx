@@ -53,10 +53,11 @@ export async function action({ request }: ActionFunctionArgs) {
 
     await createTimesheetEntry(user.basecampAccountId, recordingId, accessToken, payload);
     syncStatus = "SYNCED";
-  } catch (err: any) {
-    if (err?.message !== "bootstrap") {
+  } catch (err: unknown) {
+    const errMsg = err instanceof Error ? err.message : String(err);
+    if (errMsg !== "bootstrap") {
       console.error("[RETRY] Basecamp sync failed:", err);
-      syncError = (err as Error).message || "Basecamp sync failed";
+      syncError = errMsg || "Basecamp sync failed";
     }
   }
 

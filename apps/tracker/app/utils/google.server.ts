@@ -1,5 +1,18 @@
 import { prisma } from "./db.server";
 
+type RawGoogleCalendarEvent = {
+  id: string;
+  summary?: string;
+  description?: string;
+  htmlLink?: string;
+  start?: { dateTime?: string; date?: string };
+  end?: { dateTime?: string; date?: string };
+  status?: string;
+};
+
+type RawGoogleTaskList = { id: string; title: string };
+type RawGoogleTask = { id: string; title?: string; notes?: string; due?: string };
+
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
 const GOOGLE_REDIRECT_URI = process.env.GOOGLE_REDIRECT_URI;
@@ -154,7 +167,7 @@ export async function fetchCalendarEvents(accessToken: string, date: Date) {
     throw new Error(`Failed to fetch calendar events: ${errorText}`);
   }
 
-  const data = await response.json() as { items?: any[] };
+  const data = await response.json() as { items?: RawGoogleCalendarEvent[] };
   return (data.items || []).filter((e) => e.status !== "cancelled");
 }
 
@@ -173,8 +186,8 @@ export async function fetchTaskLists(accessToken: string) {
     throw new Error(`Failed to fetch task lists: ${errorText}`);
   }
 
-  const data = await response.json() as { items?: any[] };
-  return (data.items || []).map((list: any) => ({
+  const data = await response.json() as { items?: RawGoogleTaskList[] };
+  return (data.items || []).map((list) => ({
     id: list.id,
     title: list.title,
   }));
@@ -200,8 +213,8 @@ export async function fetchTasks(accessToken: string, taskListId: string) {
     throw new Error(`Failed to fetch tasks: ${errorText}`);
   }
 
-  const data = await response.json() as { items?: any[] };
-  return (data.items || []).map((task: any) => ({
+  const data = await response.json() as { items?: RawGoogleTask[] };
+  return (data.items || []).map((task) => ({
     id: task.id,
     title: task.title,
     notes: task.notes,

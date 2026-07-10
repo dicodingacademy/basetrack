@@ -33,7 +33,7 @@ export function ConditionRow({ condition, onChange, onRemove, index }: Condition
     onChange(index, newCondition);
   };
 
-  const handleValueChange = (val: any) => {
+  const handleValueChange = (val: Condition["value"]) => {
     onChange(index, { ...condition, value: val });
   };
 

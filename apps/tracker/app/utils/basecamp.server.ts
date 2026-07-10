@@ -1,5 +1,8 @@
 
 import { prisma } from "./db.server";
+import type { BasecampAssignment } from "../types/basecamp";
+
+type AssignmentsPage = BasecampAssignment[] | { priorities?: BasecampAssignment[]; non_priorities?: BasecampAssignment[] };
 
 const CLIENT_ID = process.env.BASECAMP_CLIENT_ID;
 const CLIENT_SECRET = process.env.BASECAMP_CLIENT_SECRET;
@@ -111,7 +114,7 @@ export async function getValidAccessToken(userId: string) {
 }
 
 export async function fetchAssignments(accountId: string, accessToken: string) {
-  const all: any[] = [];
+  const all: BasecampAssignment[] = [];
   let url: string | null = `https://3.basecampapi.com/${accountId}/my/assignments.json`;
 
   while (url) {
@@ -127,8 +130,8 @@ export async function fetchAssignments(accountId: string, accessToken: string) {
       throw new Error(`Failed to fetch assignments: ${err}`);
     }
 
-    const page: any = await res.json();
-    const items: any[] = Array.isArray(page)
+    const page = await res.json() as AssignmentsPage;
+    const items: BasecampAssignment[] = Array.isArray(page)
       ? page
       : [...(page.priorities ?? []), ...(page.non_priorities ?? [])];
     all.push(...items);

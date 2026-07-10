@@ -23,8 +23,8 @@ export async function generateNewApiKey(userId: string) {
       },
       body: JSON.stringify({ userId }),
     }).catch((e) => console.error("Failed to kick zombie WS sessions:", e.message));
-  } catch (e: any) {
-    console.error("Failed to trigger WS kick:", e.message);
+  } catch (e: unknown) {
+    console.error("Failed to trigger WS kick:", (e as Error).message);
   }
 
   return user;

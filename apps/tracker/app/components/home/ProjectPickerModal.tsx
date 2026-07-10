@@ -32,8 +32,8 @@ export function ProjectPickerModal({ projects, onSelect, children }: ProjectPick
     try {
       await onSelect(project);
       setOpen(false);
-    } catch (e: any) {
-      setError(e?.message || "Terjadi kesalahan, coba lagi.");
+    } catch (e: unknown) {
+      setError((e as Error)?.message || "Terjadi kesalahan, coba lagi.");
     } finally {
       setCheckingId(null);
     }
