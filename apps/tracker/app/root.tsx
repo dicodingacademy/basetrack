@@ -24,12 +24,15 @@ export const links: Route.LinksFunction = () => [
   },
 ];
 
+const THEME_SCRIPT = `(function(){var t=localStorage.getItem('theme');var d=window.matchMedia('(prefers-color-scheme:dark)').matches;if(t==='dark'||(t!=='light'&&d)){document.documentElement.classList.add('dark');}})();`;
+
 export function Layout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className="dark">
+    <html lang="en" suppressHydrationWarning>
       <head>
         <meta charSet="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
         <Meta />
         <Links />
       </head>
