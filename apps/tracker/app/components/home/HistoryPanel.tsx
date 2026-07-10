@@ -95,12 +95,22 @@ export function HistoryPanel() {
     ? (fetchedData?.mode === "weekly" ? fetchedData : lastWeeklyRef.current)
     : null;
 
+  // Auto-select the right day whenever weekly data for a new week arrives
+  useEffect(() => {
+    if (!weekData?.dailyTotals) return;
+    const todayInWeek = weekData.dailyTotals.find(d => d.date === todayStr);
+    const firstWithData = weekData.dailyTotals.find(d => d.count > 0);
+    setSelectedWeekDay(
+      todayInWeek?.date ?? firstWithData?.date ?? weekData.dailyTotals[0]?.date ?? null
+    );
+  }, [weekData?.weekStart]);
+
   const isFirstLoad = isLoading && (viewMode === "daily" ? !lastDailyRef.current : !lastWeeklyRef.current);
 
   const allEntries: TimeEntryRow[] = (viewMode === "daily" ? dailyData : weekData)?.entries ?? [];
 
   const filteredEntries: TimeEntryRow[] = viewMode === "weekly" && selectedWeekDay
-    ? allEntries.filter(e => e.startedAt.startsWith(selectedWeekDay))
+    ? allEntries.filter(e => new Date(e.startedAt).toLocaleDateString("en-CA") === selectedWeekDay)
     : allEntries;
 
   const handleDayClick = (date: string) => setSelectedWeekDay(date || null);
@@ -266,6 +276,7 @@ export function HistoryPanel() {
                 </div>
                 <WeekBarChart
                   dailyTotals={weekData.dailyTotals ?? []}
+                  entries={weekData.entries ?? []}
                   selectedDay={selectedWeekDay}
                   todayStr={todayStr}
                   onDayClick={handleDayClick}
@@ -277,38 +288,62 @@ export function HistoryPanel() {
           {/* Entry list — skeleton only on first load, opacity fade on reload */}
           {isFirstLoad ? (
             <ContentSkeleton />
-          ) : (
-            <div className={cn("transition-opacity duration-150", isLoading && "opacity-40")}>
-              {filteredEntries.length === 0 ? (
-                <EmptyState
-                  icon={History}
-                  title="No entries"
-                  sub={selectedWeekDay ? "No entries for this day." : "No time entries logged this week."}
-                />
-              ) : (() => {
-                const grouped: Record<string, TimeEntryRow[]> = {};
-                for (const e of filteredEntries) {
-                  const key = new Date(e.startedAt).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
-                  if (!grouped[key]) grouped[key] = [];
-                  grouped[key].push(e);
-                }
-                return (
-                  <div className="flex flex-col gap-5">
-                    {Object.entries(grouped).map(([date, items]) => (
-                      <div key={date}>
-                        <p className="text-[10.5px] font-semibold tracking-wider uppercase text-muted-foreground mb-2">{date}</p>
-                        <div className="flex flex-col gap-2">
-                          {items.map(e => (
-                            <EntryRow key={e.id} e={e} retryingId={retryingId} onRetry={handleRetry} />
-                          ))}
-                        </div>
-                      </div>
+          ) : (() => {
+            const weekDays = weekData?.dailyTotals?.map(d => d.date) ?? [];
+            const currentDayIdx = selectedWeekDay ? weekDays.indexOf(selectedWeekDay) : -1;
+            const canPrev = currentDayIdx > 0;
+            const canNext = currentDayIdx >= 0 && currentDayIdx < weekDays.length - 1;
+
+            return (
+              <div className={cn("transition-opacity duration-150", isLoading && "opacity-40")}>
+                {filteredEntries.length === 0 ? (
+                  <EmptyState
+                    icon={History}
+                    title="No entries"
+                    sub="No time entries for this day."
+                  />
+                ) : (
+                  <div className="flex flex-col gap-2">
+                    {filteredEntries.map(e => (
+                      <EntryRow key={e.id} e={e} retryingId={retryingId} onRetry={handleRetry} />
                     ))}
                   </div>
-                );
-              })()}
-            </div>
-          )}
+                )}
+
+                {/* Day pagination */}
+                <div className="flex items-center justify-between mt-5 pt-4 border-t">
+                  <Button
+                    variant="outline" size="icon" className="size-8 shrink-0"
+                    disabled={!canPrev}
+                    onClick={() => setSelectedWeekDay(weekDays[currentDayIdx - 1])}
+                  >
+                    <ChevronLeft className="size-3.5" />
+                  </Button>
+                  <div className="text-center">
+                    <p className="text-sm font-semibold">
+                      {selectedWeekDay
+                        ? new Date(selectedWeekDay + "T12:00:00").toLocaleDateString("en-US", {
+                            weekday: "long", month: "short", day: "numeric",
+                          })
+                        : ""}
+                    </p>
+                    {filteredEntries.length > 0 && (
+                      <p className="text-[10px] text-muted-foreground font-mono mt-0.5">
+                        {filteredEntries.length} {filteredEntries.length === 1 ? "entry" : "entries"}
+                      </p>
+                    )}
+                  </div>
+                  <Button
+                    variant="outline" size="icon" className="size-8 shrink-0"
+                    disabled={!canNext}
+                    onClick={() => setSelectedWeekDay(weekDays[currentDayIdx + 1])}
+                  >
+                    <ChevronRight className="size-3.5" />
+                  </Button>
+                </div>
+              </div>
+            );
+          })()}
         </div>
       )}
     </div>
