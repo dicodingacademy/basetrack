@@ -1,5 +1,5 @@
 import { useState, useEffect, Suspense } from "react";
-import { Form, Await, useFetcher } from "react-router";
+import { Form, Await } from "react-router";
 
 import type { Route } from "./+types/home";
 import { getSession, getUserFromSessionId } from "../utils/session.server";
@@ -13,6 +13,7 @@ import { prisma } from "../utils/db.server";
 import { randomUUID } from "node:crypto";
 
 import { cn } from "../lib/utils";
+import { fmtTime } from "../lib/format";
 import { Button } from "../components/ui/button";
 import { Badge } from "../components/ui/badge";
 import { Skeleton } from "../components/ui/skeleton";
@@ -41,14 +42,15 @@ import { useTimerTitle } from "../hooks/useTimerTitle";
 import { ProjectPickerModal } from "../components/home/ProjectPickerModal";
 import { PendingApprovals } from "../components/home/PendingApprovals";
 import { SettingsModal } from "../components/home/SettingsModal";
+import { ContentSkeleton, EmptyState } from "../components/home/ContentSkeleton";
+import { BasecampTaskCard, GoogleEventCard } from "../components/home/EventCard";
+import { TimerPanel } from "../components/home/TimerPanel";
+import { HistoryPanel } from "../components/home/HistoryPanel";
 
 import {
   Briefcase,
   Calendar,
   ListTodo,
-  Clock,
-  Square,
-  Play,
   ChevronLeft,
   ChevronRight,
   CheckCircle2,
@@ -60,11 +62,11 @@ import {
 import type { BasecampAssignment, GroupedTask } from "../types/basecamp";
 import type { GoogleCalendarEvent, GoogleTask } from "../types/google";
 import type { Condition } from "../components/home/types";
-import type { StartTimerData } from "../hooks/useTimerWebSocket";
+import type { TimeEntry, Prisma } from "@prisma/client";
 
 type AppData = {
   projects: { id: string; name: string; taskCount: number }[];
-  pendingApprovals: any[];
+  pendingApprovals: TimeEntry[];
   timesheetProjects: { id: string; name: string }[];
   calendarEvents: GoogleCalendarEvent[];
   googleTasks: GoogleTask[];
@@ -82,15 +84,13 @@ export function meta(_args: Route.MetaArgs) {
   ];
 }
 
-async function loadData(user: any): Promise<AppData> {
+async function loadData(user: NonNullable<Awaited<ReturnType<typeof getUserFromSessionId>>>): Promise<AppData> {
   let projects: { id: string; name: string; taskCount: number }[] = [];
 
   try {
     const accessToken = await getValidAccessToken(user.id);
     const rawAssignments = await fetchAssignments(user.basecampAccountId, accessToken);
-
     const items: BasecampAssignment[] = rawAssignments;
-
     const counts: Record<string, { name: string; count: number }> = {};
     for (const curr of items) {
       if (!curr.bucket) continue;
@@ -114,7 +114,7 @@ async function loadData(user: any): Promise<AppData> {
     try {
       const googleToken = await getValidGoogleToken(user.id);
       const events = await fetchCalendarEvents(googleToken, new Date());
-      calendarEvents = (events || []).map((e: any) => ({
+      calendarEvents = (events || []).map(e => ({
         id: e.id,
         summary: e.summary || "Untitled Event",
         description: e.description,
@@ -132,7 +132,6 @@ async function loadData(user: any): Promise<AppData> {
       const allTasks: GoogleTask[] = [];
       const endOfToday = new Date();
       endOfToday.setHours(23, 59, 59, 999);
-
       for (const list of taskLists) {
         try {
           const tasks = await fetchTasks(googleToken, list.id);
@@ -147,9 +146,7 @@ async function loadData(user: any): Promise<AppData> {
             };
             if (t.due) {
               const dueDate = new Date(t.due);
-              if (dueDate <= endOfToday) {
-                allTasks.push(mappedTask);
-              }
+              if (dueDate <= endOfToday) allTasks.push(mappedTask);
             }
           }
         } catch (err) {
@@ -170,21 +167,14 @@ export async function loader({ request }: Route.LoaderArgs) {
   const session = await getSession(cookie);
   const sessionId = session.get("sessionId");
 
-  if (!sessionId) {
-    return { user: null, activeTimer: null, googleConnected: false, data: null };
-  }
+  if (!sessionId) return { user: null, activeTimer: null, googleConnected: false, data: null };
 
   let user = await getUserFromSessionId(sessionId);
 
-  if (!user) {
-    return { user: null, activeTimer: null, googleConnected: false, data: null };
-  }
+  if (!user) return { user: null, activeTimer: null, googleConnected: false, data: null };
 
   if (!user.apiKey) {
-    await prisma.user.update({
-      where: { id: user.id },
-      data: { apiKey: randomUUID() },
-    });
+    await prisma.user.update({ where: { id: user.id }, data: { apiKey: randomUUID() } });
     user = await getUserFromSessionId(sessionId);
   }
 
@@ -225,9 +215,7 @@ export async function action({ request }: Route.ActionArgs) {
   if (intent === "APPROVE_TIMER") {
     const entryId = formData.get("entryId") as string;
     const durationHours = parseFloat(formData.get("durationHours") as string);
-    if (!entryId || isNaN(durationHours)) {
-      return new Response("Invalid data", { status: 400 });
-    }
+    if (!entryId || isNaN(durationHours)) return new Response("Invalid data", { status: 400 });
     return await approveTimeEntry(user.id, entryId, user.basecampAccountId, Math.floor(durationHours * 3600));
   }
 
@@ -257,7 +245,8 @@ export async function action({ request }: Route.ActionArgs) {
     let rules;
     try { rules = JSON.parse(rulesStr); } catch { return new Response("Invalid JSON", { status: 400 }); }
     if (!Array.isArray(rules)) return new Response("Expected array", { status: 400 });
-    await replaceAllRules(user.id, rules.map((r: any) => ({ name: r.name, enabled: r.enabled !== false, conditions: r.conditions })));
+    type RuleInput = { name?: string; enabled?: boolean; conditions: Prisma.InputJsonValue };
+    await replaceAllRules(user.id, (rules as RuleInput[]).map(r => ({ name: r.name, enabled: r.enabled !== false, conditions: r.conditions })));
     return { success: true };
   }
 
@@ -280,449 +269,6 @@ export async function action({ request }: Route.ActionArgs) {
 
   return { success: false };
 }
-
-// ── HELPERS ──────────────────────────────────────────────────────────────
-
-function fmtTime(s: number) {
-  const h = Math.floor(s / 3600);
-  const m = Math.floor((s % 3600) / 60);
-  const sec = s % 60;
-  return `${h}:${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}`;
-}
-
-// ── EVENT CARD (shared by Basecamp tasks, Calendar events, Google Tasks) ─
-
-type EventCardProps = {
-  isActive: boolean;
-  timeLabel: string;
-  typeLabel: string;
-  title: string;
-  tags?: string[];
-  isPending: boolean;
-  onStop: () => void;
-  startSlot: React.ReactNode;
-};
-
-function EventCard({ isActive, timeLabel, typeLabel, title, tags, isPending, onStop, startSlot }: EventCardProps) {
-  return (
-    <div className={cn(
-      "group flex items-stretch rounded-xl border bg-card overflow-hidden transition-all",
-      "hover:-translate-y-px hover:shadow-lg hover:border-muted-foreground",
-      isActive && "border-primary bg-primary/10"
-    )}>
-      <div className={cn("w-1 shrink-0 bg-border transition-colors", isActive && "bg-primary")} />
-      <div className="flex flex-1 items-center gap-3.5 px-4 py-3.5 min-w-0">
-        <div className="w-14 shrink-0">
-          <p className={cn("font-mono text-[13px] font-medium leading-none", isActive ? "text-primary" : "text-foreground")}>
-            {timeLabel}
-          </p>
-          <p className="text-[10px] text-muted-foreground mt-1">{typeLabel}</p>
-        </div>
-        <div className="w-px h-7 bg-border shrink-0" />
-        <div className="flex-1 min-w-0">
-          <p className="text-[13.5px] font-medium truncate text-foreground">{title}</p>
-          {tags && tags.length > 0 && (
-            <div className="flex gap-1 mt-1 flex-wrap">
-              {tags.map(t => (
-                <Badge key={t} variant="secondary" className="text-[10px] px-1.5 py-0 rounded-sm h-auto">{t}</Badge>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
-      <div className="flex items-center px-3 shrink-0">
-        {isActive ? (
-          <Button variant="destructive" size="sm" disabled={isPending} onClick={onStop} className="gap-1.5">
-            <Square className="size-2.5 fill-current" />
-            Stop
-          </Button>
-        ) : startSlot}
-      </div>
-    </div>
-  );
-}
-
-// ── BASECAMP TASK CARD ───────────────────────────────────────────────────
-
-function BasecampTaskCard({ task, projectId, projectName, activeTimer, onStart, onStop, isPending }: {
-  task: GroupedTask;
-  projectId: string;
-  projectName: string;
-  activeTimer: any;
-  onStart: (d: StartTimerData) => void;
-  onStop: () => void;
-  isPending: boolean;
-}) {
-  const isActive = activeTimer?.todoId === task.id;
-  const dateLabel = task.dueOn
-    ? new Date(task.dueOn).toLocaleDateString("en-US", { month: "short", day: "numeric" })
-    : "—";
-  return (
-    <EventCard
-      isActive={isActive}
-      timeLabel={dateLabel}
-      typeLabel="Basecamp"
-      title={task.title}
-      tags={task.parent ? [task.parent.title] : undefined}
-      isPending={isPending}
-      onStop={onStop}
-      startSlot={
-        <Button
-          variant="outline"
-          size="sm"
-          disabled={isPending || (!!activeTimer && !isActive)}
-          onClick={() => onStart({ todoId: task.id, todoTitle: task.title, projectId, projectName })}
-          className="gap-1.5"
-        >
-          <Play className="size-2.5 fill-current" />
-          Start
-        </Button>
-      }
-    />
-  );
-}
-
-// ── GOOGLE EVENT CARD ────────────────────────────────────────────────────
-
-function GoogleEventCard({ item, source, projects, isActive, onStart, onStop, isPending }: {
-  item: GoogleCalendarEvent | GoogleTask;
-  source: "GOOGLE_CALENDAR" | "GOOGLE_TASKS";
-  projects: { id: string; name: string }[];
-  isActive: boolean;
-  onStart: (d: StartTimerData) => void;
-  onStop: () => void;
-  isPending: boolean;
-}) {
-  const isCalendar = source === "GOOGLE_CALENDAR";
-  const displayTitle = isCalendar
-    ? (item as GoogleCalendarEvent).summary || "Untitled Event"
-    : (item as GoogleTask).title || "Untitled Task";
-
-  const timeLabel = isCalendar
-    ? (() => {
-        const ev = item as GoogleCalendarEvent;
-        return ev.start.dateTime
-          ? new Date(ev.start.dateTime).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
-          : "All day";
-      })()
-    : (() => {
-        const task = item as GoogleTask;
-        return task.due
-          ? new Date(task.due).toLocaleDateString("en-US", { month: "short", day: "numeric" })
-          : "No due";
-      })();
-
-  const handleSelect = async (project: { id: string; name: string }) => {
-    const res = await fetch(`/api/check-timesheet?projectId=${project.id}`);
-    const { available } = await res.json();
-    if (!available) {
-      throw new Error(
-        "Project ini belum punya time entry di Basecamp. Log minimal satu time entry manual di Basecamp untuk project ini terlebih dahulu."
-      );
-    }
-    onStart({ todoId: item.id, todoTitle: displayTitle, projectId: project.id, projectName: project.name, source });
-  };
-
-  return (
-    <EventCard
-      isActive={isActive}
-      timeLabel={timeLabel}
-      typeLabel={isCalendar ? "Calendar" : "Task"}
-      title={displayTitle}
-      isPending={isPending}
-      onStop={onStop}
-      startSlot={
-        <ProjectPickerModal projects={projects} onSelect={handleSelect}>
-          <Button variant="outline" size="sm" disabled={isPending} className="gap-1.5">
-            <Play className="size-2.5 fill-current" />
-            Start
-          </Button>
-        </ProjectPickerModal>
-      }
-    />
-  );
-}
-
-// ── CONTENT SKELETON ─────────────────────────────────────────────────────
-
-function ContentSkeleton() {
-  return (
-    <div className="flex flex-col gap-2.5">
-      {[1, 2, 3, 4].map(i => <Skeleton key={i} className="h-14 w-full rounded-xl" />)}
-    </div>
-  );
-}
-
-// ── EMPTY STATE ──────────────────────────────────────────────────────────
-
-function EmptyState({ icon: Icon, title, sub }: { icon: React.ElementType; title: string; sub: string }) {
-  return (
-    <div className="flex flex-col items-center justify-center py-16 text-center gap-3">
-      <Icon className="size-12 text-muted-foreground" />
-      <p className="font-semibold text-base">{title}</p>
-      <p className="text-sm text-muted-foreground max-w-[260px] leading-relaxed">{sub}</p>
-    </div>
-  );
-}
-
-// ── TIMER PANEL ──────────────────────────────────────────────────────────
-
-function TimerPanel({ activeTimer, elapsed, onStop, isPending }: {
-  activeTimer: any;
-  elapsed: number;
-  onStop: () => void;
-  isPending: boolean;
-}) {
-  return (
-    <div className="w-[270px] h-full border-l bg-sidebar flex flex-col overflow-hidden">
-      {activeTimer ? (
-        <>
-          <div className="px-5 pt-5 pb-0">
-            <p className="text-[9px] font-medium tracking-[0.12em] uppercase text-muted-foreground">Running</p>
-            <p className="font-mono text-[50px] font-light text-primary leading-none mt-2.5 mb-1.5 tracking-tight">
-              {fmtTime(elapsed)}
-            </p>
-            <p className="text-[12.5px] text-muted-foreground leading-snug pb-4 border-b border-border">
-              {activeTimer.todoTitle}
-            </p>
-          </div>
-          <div className="px-5 py-3.5 border-b border-border">
-            <Button
-              variant="destructive"
-              className="w-full gap-2"
-              size="sm"
-              disabled={isPending}
-              onClick={onStop}
-            >
-              <Square className="size-2.5 fill-current" />
-              Stop Timer
-            </Button>
-          </div>
-          <div className="px-5 py-4 flex-1 overflow-y-auto">
-            <p className="text-[9px] font-medium tracking-[0.12em] uppercase text-muted-foreground mb-2">Project</p>
-            <p className="text-[11.5px] text-muted-foreground">{activeTimer.projectName}</p>
-          </div>
-        </>
-      ) : (
-        <div className="flex flex-col items-center justify-center flex-1 gap-3 px-5 py-8 text-center">
-          <div className="size-14 rounded-full border border-dashed border-border flex items-center justify-center text-muted-foreground">
-            <Clock className="size-5" />
-          </div>
-          <p className="text-[12.5px] text-muted-foreground leading-relaxed">
-            No timer running.<br />Pick an item to track.
-          </p>
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ── HISTORY PANEL ────────────────────────────────────────────────────────
-
-function HistoryPanel() {
-  const fetcher = useFetcher<{ entries: any[]; total: number; page: number; pageSize: number }>();
-  const retryFetcher = useFetcher<{ success: boolean; syncError?: string }>();
-  const [status, setStatus] = useState("all");
-  const [source, setSource] = useState("all");
-  const [page, setPage] = useState(1);
-  const [datePreset, setDatePreset] = useState<"7" | "30" | "90">("30");
-  const [retryingId, setRetryingId] = useState<string | null>(null);
-
-  const loadEntries = (overrides?: { status?: string; source?: string; page?: number; datePreset?: string }) => {
-    const s = overrides?.status ?? status;
-    const src = overrides?.source ?? source;
-    const p = overrides?.page ?? page;
-    const d = overrides?.datePreset ?? datePreset;
-    const from = new Date();
-    from.setDate(from.getDate() - parseInt(d));
-    const fromStr = from.toISOString().split("T")[0];
-    fetcher.load(`/api/time-entries?page=${p}&status=${s}&source=${src}&from=${fromStr}`);
-  };
-
-  useEffect(() => { loadEntries(); }, [status, source, page, datePreset]);
-
-  useEffect(() => {
-    if (retryFetcher.state === "idle" && retryingId !== null) {
-      setRetryingId(null);
-      loadEntries();
-    }
-  }, [retryFetcher.state]);
-
-  const handleRetry = (entryId: string) => {
-    setRetryingId(entryId);
-    retryFetcher.submit({ entryId }, { method: "post", action: "/api/time-entries/retry" });
-  };
-
-  const entries: any[] = fetcher.data?.entries ?? [];
-  const total = fetcher.data?.total ?? 0;
-  const pageSize = fetcher.data?.pageSize ?? 20;
-  const totalPages = Math.ceil(total / pageSize);
-
-  const grouped: Record<string, any[]> = {};
-  for (const e of entries) {
-    const key = new Date(e.startedAt).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
-    if (!grouped[key]) grouped[key] = [];
-    grouped[key].push(e);
-  }
-
-  const fmtDuration = (sec: number) => {
-    const h = Math.floor(sec / 3600);
-    const m = Math.floor((sec % 3600) / 60);
-    return h > 0 ? `${h}h ${m}m` : `${m}m`;
-  };
-
-  const sourceBar: Record<string, string> = {
-    BASECAMP: "bg-primary",
-    GOOGLE_CALENDAR: "bg-blue-500",
-    GOOGLE_TASKS: "bg-emerald-500",
-  };
-
-  const statusStyle: Record<string, string> = {
-    SYNCED: "bg-emerald-500/15 text-emerald-400",
-    FAILED: "bg-destructive/15 text-destructive",
-    NEEDS_APPROVAL: "bg-primary/15 text-primary",
-    PENDING: "bg-yellow-500/15 text-yellow-400",
-  };
-
-  const statusLabel: Record<string, string> = {
-    SYNCED: "Synced",
-    FAILED: "Failed",
-    NEEDS_APPROVAL: "Needs Approval",
-    PENDING: "Pending",
-  };
-
-  const selectClass = "h-8 rounded-lg border border-border bg-card px-2.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary";
-
-  return (
-    <div>
-      <p className="text-sm font-semibold mb-1">Time Tracking History</p>
-      <p className="text-xs text-muted-foreground mb-5">Your logged time entries across all sources.</p>
-
-      {/* Filter bar */}
-      <div className="flex flex-wrap items-center gap-2 mb-5">
-        <div className="flex rounded-lg border overflow-hidden text-xs">
-          {(["7", "30", "90"] as const).map(d => (
-            <button
-              key={d}
-              onClick={() => { setDatePreset(d); setPage(1); loadEntries({ datePreset: d, page: 1 }); }}
-              className={cn(
-                "px-3 py-1.5 transition-colors",
-                datePreset === d ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"
-              )}
-            >
-              {d}d
-            </button>
-          ))}
-        </div>
-        <select value={status} onChange={e => { setStatus(e.target.value); setPage(1); loadEntries({ status: e.target.value, page: 1 }); }} className={selectClass}>
-          <option value="all">All status</option>
-          <option value="synced">Synced</option>
-          <option value="needs_approval">Needs Approval</option>
-          <option value="pending">Pending</option>
-          <option value="failed">Failed</option>
-        </select>
-        <select value={source} onChange={e => { setSource(e.target.value); setPage(1); loadEntries({ source: e.target.value, page: 1 }); }} className={selectClass}>
-          <option value="all">All sources</option>
-          <option value="basecamp">Basecamp</option>
-          <option value="calendar">Google Calendar</option>
-          <option value="tasks">Google Tasks</option>
-        </select>
-        {total > 0 && (
-          <span className="ml-auto text-xs text-muted-foreground font-mono">{total} entries</span>
-        )}
-      </div>
-
-      {fetcher.state === "loading" && <ContentSkeleton />}
-
-      {fetcher.state !== "loading" && entries.length === 0 && (
-        <EmptyState icon={History} title="No time entries" sub="No entries found for the selected filters." />
-      )}
-
-      {fetcher.state !== "loading" && entries.length > 0 && (
-        <div className="flex flex-col gap-5">
-          {Object.entries(grouped).map(([date, items]) => (
-            <div key={date}>
-              <p className="text-[10.5px] font-semibold tracking-wider uppercase text-muted-foreground mb-2">{date}</p>
-              <div className="flex flex-col gap-2">
-                {items.map((e: any) => {
-                  const isTooShort = e.syncStatus === "FAILED" && e.durationSec < 60;
-                  const isRetryable = e.syncStatus === "FAILED" && e.durationSec >= 60;
-                  const isRetrying = retryingId === e.id;
-                  return (
-                    <div key={e.id} className="rounded-xl border bg-card overflow-hidden">
-                      <div className="flex items-stretch">
-                        <div className={cn("w-1 shrink-0", sourceBar[e.source] ?? "bg-muted-foreground")} />
-                        <div className="flex flex-1 items-center gap-3.5 px-4 py-3 min-w-0">
-                          <div className="w-16 shrink-0">
-                            <p className="font-mono text-[13px] font-medium text-foreground leading-none">
-                              {new Date(e.startedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-                            </p>
-                            <p className="text-[10px] text-muted-foreground mt-0.5">{fmtDuration(e.durationSec)}</p>
-                          </div>
-                          <div className="w-px h-7 bg-border shrink-0" />
-                          <div className="flex-1 min-w-0">
-                            <p className="text-[13px] font-medium truncate text-foreground">{e.todoTitle}</p>
-                            <p className="text-[11px] text-muted-foreground truncate">{e.projectName}</p>
-                          </div>
-                          <div className="flex items-center gap-2 shrink-0">
-                            {isTooShort ? (
-                              <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-muted text-muted-foreground whitespace-nowrap" title="Duration too short for Basecamp sync">
-                                Too short
-                              </span>
-                            ) : (
-                              <span className={cn("text-[10px] font-medium px-2 py-0.5 rounded-full whitespace-nowrap", statusStyle[e.syncStatus] ?? "bg-muted text-muted-foreground")}>
-                                {statusLabel[e.syncStatus] ?? e.syncStatus}
-                              </span>
-                            )}
-                            {isRetryable && (
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                className="h-6 px-2 text-[11px]"
-                                disabled={isRetrying}
-                                onClick={() => handleRetry(e.id)}
-                              >
-                                {isRetrying ? "Syncing…" : "Retry"}
-                              </Button>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                      {e.syncError && !isTooShort && (
-                        <div className="px-5 pb-2.5 ml-1">
-                          <p className="text-[10.5px] text-destructive leading-snug">{e.syncError}</p>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {totalPages > 1 && (
-        <div className="flex items-center justify-between mt-5 pt-4 border-t">
-          <span className="text-xs text-muted-foreground font-mono">
-            {(page - 1) * pageSize + 1}–{Math.min(page * pageSize, total)} of {total}
-          </span>
-          <div className="flex items-center gap-1">
-            <Button variant="outline" size="icon" className="size-7" disabled={page === 1} onClick={() => setPage(p => p - 1)}>
-              <ChevronLeft className="size-3.5" />
-            </Button>
-            <span className="px-2 text-xs font-mono text-muted-foreground">{page} / {totalPages}</span>
-            <Button variant="outline" size="icon" className="size-7" disabled={page === totalPages} onClick={() => setPage(p => p + 1)}>
-              <ChevronRight className="size-3.5" />
-            </Button>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ── MAIN COMPONENT ───────────────────────────────────────────────────────
 
 export default function Home({ loaderData }: Route.ComponentProps) {
   const { user, activeTimer: serverActiveTimer, wsUrl, googleConnected, rules } = loaderData;
@@ -794,7 +340,6 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 
   return (
     <SidebarProvider>
-      {/* ICON RAIL SIDEBAR */}
       <Sidebar collapsible="icon">
         <SidebarHeader>
           <SidebarMenu>
@@ -818,31 +363,19 @@ export default function Home({ loaderData }: Route.ComponentProps) {
             <SidebarGroupContent>
               <SidebarMenu>
                 <SidebarMenuItem>
-                  <SidebarMenuButton
-                    isActive={activeTab === "basecamp"}
-                    onClick={() => setActiveTab("basecamp")}
-                    tooltip="Basecamp"
-                  >
+                  <SidebarMenuButton isActive={activeTab === "basecamp"} onClick={() => setActiveTab("basecamp")} tooltip="Basecamp">
                     <Briefcase className="size-4 shrink-0" />
                     <span className="truncate">Basecamp</span>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
                 <SidebarMenuItem>
-                  <SidebarMenuButton
-                    isActive={activeTab === "calendar"}
-                    onClick={() => setActiveTab("calendar")}
-                    tooltip="Calendar"
-                  >
+                  <SidebarMenuButton isActive={activeTab === "calendar"} onClick={() => setActiveTab("calendar")} tooltip="Calendar">
                     <Calendar className="size-4 shrink-0" />
                     <span className="truncate">Calendar</span>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
                 <SidebarMenuItem>
-                  <SidebarMenuButton
-                    isActive={activeTab === "tasks"}
-                    onClick={() => setActiveTab("tasks")}
-                    tooltip="Google Tasks"
-                  >
+                  <SidebarMenuButton isActive={activeTab === "tasks"} onClick={() => setActiveTab("tasks")} tooltip="Google Tasks">
                     <ListTodo className="size-4 shrink-0" />
                     <span className="truncate">Tasks</span>
                   </SidebarMenuButton>
@@ -857,11 +390,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
             <SidebarGroupContent>
               <SidebarMenu>
                 <SidebarMenuItem>
-                  <SidebarMenuButton
-                    isActive={activeTab === "history"}
-                    onClick={() => setActiveTab("history")}
-                    tooltip="History"
-                  >
+                  <SidebarMenuButton isActive={activeTab === "history"} onClick={() => setActiveTab("history")} tooltip="History">
                     <History className="size-4 shrink-0" />
                     <span className="truncate">History</span>
                   </SidebarMenuButton>
@@ -870,13 +399,12 @@ export default function Home({ loaderData }: Route.ComponentProps) {
             </SidebarGroupContent>
           </SidebarGroup>
 
-          {/* Project list only visible in Basecamp tab */}
           <Suspense fallback={
             <SidebarGroup>
               <SidebarGroupLabel>Project Assignments</SidebarGroupLabel>
               <SidebarGroupContent>
                 <SidebarMenu>
-                  {[1,2,3].map(i => (
+                  {[1, 2, 3].map(i => (
                     <SidebarMenuItem key={i}>
                       <SidebarMenuButton>
                         <Skeleton className="size-4 rounded" />
@@ -954,9 +482,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
         </SidebarFooter>
       </Sidebar>
 
-      {/* MAIN CONTENT */}
       <SidebarInset className="flex flex-col">
-        {/* TOPBAR */}
         <header className="sticky top-0 z-10 flex h-13 shrink-0 items-center gap-2 border-b bg-background/95 backdrop-blur-sm px-4">
           <SidebarTrigger className="-ml-1" />
           <div className="w-px h-4 bg-border" />
@@ -964,8 +490,6 @@ export default function Home({ loaderData }: Route.ComponentProps) {
           <span className="text-sm font-semibold capitalize">{activeTab}</span>
           <div className="w-px h-4 bg-border" />
           <span className="font-mono text-xs text-muted-foreground">{today}</span>
-
-          {/* Live timer chip */}
           <div className={cn(
             "ml-auto flex items-center gap-2 rounded-full border px-3 py-1.5 font-mono text-xs transition-all",
             activeTimer
@@ -980,204 +504,172 @@ export default function Home({ loaderData }: Route.ComponentProps) {
           </div>
         </header>
 
-        {/* CONTENT + TIMER PANEL */}
         <div className="flex flex-1 items-start">
-          {/* SCROLLABLE CONTENT */}
           <div className="flex-1 p-6">
             {activeTab === "history" ? (
               <HistoryPanel />
             ) : (
-            <Suspense fallback={<ContentSkeleton />}>
-              <Await resolve={loaderData.data}>
-                {(data) => {
-                  if (!data) return <ContentSkeleton />;
-                  return (
-                    <>
-                      {data.pendingApprovals?.length > 0 && (
-                        <div className="mb-5">
-                          <PendingApprovals approvals={data.pendingApprovals} />
-                        </div>
-                      )}
+              <Suspense fallback={<ContentSkeleton />}>
+                <Await resolve={loaderData.data}>
+                  {(data) => {
+                    if (!data) return <ContentSkeleton />;
+                    return (
+                      <>
+                        {data.pendingApprovals?.length > 0 && (
+                          <div className="mb-5">
+                            <PendingApprovals approvals={data.pendingApprovals} />
+                          </div>
+                        )}
 
-                      {/* BASECAMP TAB */}
-                      {activeTab === "basecamp" && (
-                        <>
-                          {data.projects.length === 0 ? (
-                            <EmptyState
-                              icon={CheckCircle2}
-                              title="You're all caught up!"
-                              sub="No active assignments found in Basecamp."
-                            />
-                          ) : !selectedProjectId ? (
-                            <>
-                              <p className="text-sm font-semibold mb-1">Your Projects</p>
-                              <p className="text-xs text-muted-foreground mb-5">Click a project to see your assigned tasks.</p>
-                              <div className="grid grid-cols-[repeat(auto-fill,minmax(180px,1fr))] gap-2.5">
-                                {data.projects.map(p => (
-                                  <button
-                                    key={p.id}
-                                    onClick={() => handleSelectProject(p.id)}
-                                    className="flex items-center gap-2.5 rounded-xl border bg-card p-3.5 text-left transition-all hover:-translate-y-px hover:shadow-md hover:border-muted-foreground text-sm font-medium"
-                                  >
-                                    <Briefcase className="size-3.5 text-muted-foreground shrink-0" />
-                                    <span className="flex-1 truncate">{p.name}</span>
-                                    <Badge variant="secondary" className="font-mono text-[10px] shrink-0">{p.taskCount}</Badge>
-                                  </button>
-                                ))}
-                              </div>
-                            </>
-                          ) : (
-                            <>
-                              <button
-                                onClick={() => { setSelectedProjectId(null); setTaskPage(1); }}
-                                className="mb-4 flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
-                              >
-                                <ChevronLeft className="size-3.5" />
-                                All Projects
-                              </button>
-                              <p className="text-sm font-semibold mb-1">
-                                {data.projects.find(p => p.id === selectedProjectId)?.name}
-                              </p>
-                              <p className="text-xs text-muted-foreground mb-5">Select a task to start tracking.</p>
-                              {isLoadingTasks ? (
-                                <ContentSkeleton />
-                              ) : (selectedProjectTasks ?? []).length === 0 ? (
-                                <EmptyState icon={CheckCircle2} title="No tasks" sub="No active tasks in this project." />
-                              ) : (() => {
-                                const tasks = selectedProjectTasks ?? [];
-                                const totalPages = Math.ceil(tasks.length / TASKS_PER_PAGE);
-                                const paginated = tasks.slice((taskPage - 1) * TASKS_PER_PAGE, taskPage * TASKS_PER_PAGE);
-                                const projectName = data.projects.find(p => p.id === selectedProjectId)?.name ?? "";
-                                return (
-                                  <>
-                                    <div className="flex flex-col gap-2.5">
-                                      {paginated.map((task: GroupedTask) => (
-                                        <BasecampTaskCard
-                                          key={task.id}
-                                          task={task}
-                                          projectId={selectedProjectId!}
-                                          projectName={projectName}
-                                          activeTimer={activeTimer}
-                                          onStart={startTimer}
-                                          onStop={stopTimer}
-                                          isPending={isPending}
-                                        />
-                                      ))}
-                                    </div>
-                                    {totalPages > 1 && (
-                                      <div className="flex items-center justify-between mt-5 pt-4 border-t">
-                                        <span className="text-xs text-muted-foreground font-mono">
-                                          {(taskPage - 1) * TASKS_PER_PAGE + 1}–{Math.min(taskPage * TASKS_PER_PAGE, tasks.length)} of {tasks.length}
-                                        </span>
-                                        <div className="flex items-center gap-1">
-                                          <Button
-                                            variant="outline"
-                                            size="icon"
-                                            className="size-7"
-                                            disabled={taskPage === 1}
-                                            onClick={() => setTaskPage(p => p - 1)}
-                                          >
-                                            <ChevronLeft className="size-3.5" />
-                                          </Button>
-                                          <span className="px-2 text-xs font-mono text-muted-foreground">
-                                            {taskPage} / {totalPages}
-                                          </span>
-                                          <Button
-                                            variant="outline"
-                                            size="icon"
-                                            className="size-7"
-                                            disabled={taskPage === totalPages}
-                                            onClick={() => setTaskPage(p => p + 1)}
-                                          >
-                                            <ChevronRight className="size-3.5" />
-                                          </Button>
-                                        </div>
+                        {activeTab === "basecamp" && (
+                          <>
+                            {data.projects.length === 0 ? (
+                              <EmptyState icon={CheckCircle2} title="You're all caught up!" sub="No active assignments found in Basecamp." />
+                            ) : !selectedProjectId ? (
+                              <>
+                                <p className="text-sm font-semibold mb-1">Your Projects</p>
+                                <p className="text-xs text-muted-foreground mb-5">Click a project to see your assigned tasks.</p>
+                                <div className="grid grid-cols-[repeat(auto-fill,minmax(180px,1fr))] gap-2.5">
+                                  {data.projects.map(p => (
+                                    <button
+                                      key={p.id}
+                                      onClick={() => handleSelectProject(p.id)}
+                                      className="flex items-center gap-2.5 rounded-xl border bg-card p-3.5 text-left transition-all hover:-translate-y-px hover:shadow-md hover:border-muted-foreground text-sm font-medium"
+                                    >
+                                      <Briefcase className="size-3.5 text-muted-foreground shrink-0" />
+                                      <span className="flex-1 truncate">{p.name}</span>
+                                      <Badge variant="secondary" className="font-mono text-[10px] shrink-0">{p.taskCount}</Badge>
+                                    </button>
+                                  ))}
+                                </div>
+                              </>
+                            ) : (
+                              <>
+                                <button
+                                  onClick={() => { setSelectedProjectId(null); setTaskPage(1); }}
+                                  className="mb-4 flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                                >
+                                  <ChevronLeft className="size-3.5" />
+                                  All Projects
+                                </button>
+                                <p className="text-sm font-semibold mb-1">
+                                  {data.projects.find(p => p.id === selectedProjectId)?.name}
+                                </p>
+                                <p className="text-xs text-muted-foreground mb-5">Select a task to start tracking.</p>
+                                {isLoadingTasks ? (
+                                  <ContentSkeleton />
+                                ) : (selectedProjectTasks ?? []).length === 0 ? (
+                                  <EmptyState icon={CheckCircle2} title="No tasks" sub="No active tasks in this project." />
+                                ) : (() => {
+                                  const tasks = selectedProjectTasks ?? [];
+                                  const totalPages = Math.ceil(tasks.length / TASKS_PER_PAGE);
+                                  const paginated = tasks.slice((taskPage - 1) * TASKS_PER_PAGE, taskPage * TASKS_PER_PAGE);
+                                  const projectName = data.projects.find(p => p.id === selectedProjectId)?.name ?? "";
+                                  return (
+                                    <>
+                                      <div className="flex flex-col gap-2.5">
+                                        {paginated.map((task: GroupedTask) => (
+                                          <BasecampTaskCard
+                                            key={task.id}
+                                            task={task}
+                                            projectId={selectedProjectId!}
+                                            projectName={projectName}
+                                            activeTimer={activeTimer}
+                                            onStart={startTimer}
+                                            onStop={stopTimer}
+                                            isPending={isPending}
+                                          />
+                                        ))}
                                       </div>
-                                    )}
-                                  </>
-                                );
-                              })()}
-                            </>
-                          )}
-                        </>
-                      )}
+                                      {totalPages > 1 && (
+                                        <div className="flex items-center justify-between mt-5 pt-4 border-t">
+                                          <span className="text-xs text-muted-foreground font-mono">
+                                            {(taskPage - 1) * TASKS_PER_PAGE + 1}–{Math.min(taskPage * TASKS_PER_PAGE, tasks.length)} of {tasks.length}
+                                          </span>
+                                          <div className="flex items-center gap-1">
+                                            <Button variant="outline" size="icon" className="size-7" disabled={taskPage === 1} onClick={() => setTaskPage(p => p - 1)}>
+                                              <ChevronLeft className="size-3.5" />
+                                            </Button>
+                                            <span className="px-2 text-xs font-mono text-muted-foreground">{taskPage} / {totalPages}</span>
+                                            <Button variant="outline" size="icon" className="size-7" disabled={taskPage === totalPages} onClick={() => setTaskPage(p => p + 1)}>
+                                              <ChevronRight className="size-3.5" />
+                                            </Button>
+                                          </div>
+                                        </div>
+                                      )}
+                                    </>
+                                  );
+                                })()}
+                              </>
+                            )}
+                          </>
+                        )}
 
-                      {/* CALENDAR TAB */}
-                      {activeTab === "calendar" && (
-                        <>
-                          {!googleConnected ? (
-                            <EmptyState
-                              icon={Calendar}
-                              title="Google Calendar not connected"
-                              sub="Connect your Google account in Settings to see your calendar events here."
-                            />
-                          ) : data.calendarEvents.length === 0 ? (
-                            <EmptyState icon={Calendar} title="No events today" sub="No calendar events scheduled for today." />
-                          ) : (
-                            <>
-                              <p className="text-sm font-semibold mb-1">Today's Events</p>
-                              <p className="text-xs text-muted-foreground mb-5">Select an event and choose a Basecamp project to start tracking.</p>
-                              <div className="flex flex-col gap-2.5">
-                                {data.calendarEvents.map((event: GoogleCalendarEvent) => (
-                                  <GoogleEventCard
-                                    key={event.id}
-                                    item={event}
-                                    source="GOOGLE_CALENDAR"
-                                    projects={data.timesheetProjects}
-                                    isActive={activeTimer?.todoId === event.id}
-                                    onStart={startTimer}
-                                    onStop={stopTimer}
-                                    isPending={isPending}
-                                  />
-                                ))}
-                              </div>
-                            </>
-                          )}
-                        </>
-                      )}
+                        {activeTab === "calendar" && (
+                          <>
+                            {!googleConnected ? (
+                              <EmptyState icon={Calendar} title="Google Calendar not connected" sub="Connect your Google account in Settings to see your calendar events here." />
+                            ) : data.calendarEvents.length === 0 ? (
+                              <EmptyState icon={Calendar} title="No events today" sub="No calendar events scheduled for today." />
+                            ) : (
+                              <>
+                                <p className="text-sm font-semibold mb-1">Today's Events</p>
+                                <p className="text-xs text-muted-foreground mb-5">Select an event and choose a Basecamp project to start tracking.</p>
+                                <div className="flex flex-col gap-2.5">
+                                  {data.calendarEvents.map((event: GoogleCalendarEvent) => (
+                                    <GoogleEventCard
+                                      key={event.id}
+                                      item={event}
+                                      source="GOOGLE_CALENDAR"
+                                      projects={data.timesheetProjects}
+                                      isActive={activeTimer?.todoId === event.id}
+                                      onStart={startTimer}
+                                      onStop={stopTimer}
+                                      isPending={isPending}
+                                    />
+                                  ))}
+                                </div>
+                              </>
+                            )}
+                          </>
+                        )}
 
-                      {/* TASKS TAB */}
-                      {activeTab === "tasks" && (
-                        <>
-                          {!googleConnected ? (
-                            <EmptyState
-                              icon={ListTodo}
-                              title="Google Tasks not connected"
-                              sub="Connect your Google account in Settings to see your tasks here."
-                            />
-                          ) : data.googleTasks.length === 0 ? (
-                            <EmptyState icon={ListTodo} title="No pending tasks" sub="No pending tasks in Google Tasks." />
-                          ) : (
-                            <>
-                              <p className="text-sm font-semibold mb-1">Google Tasks</p>
-                              <p className="text-xs text-muted-foreground mb-5">Select a task and choose a Basecamp project to start tracking.</p>
-                              <div className="flex flex-col gap-2.5">
-                                {data.googleTasks.map((task: GoogleTask) => (
-                                  <GoogleEventCard
-                                    key={task.id}
-                                    item={task}
-                                    source="GOOGLE_TASKS"
-                                    projects={data.timesheetProjects}
-                                    isActive={activeTimer?.todoId === task.id}
-                                    onStart={startTimer}
-                                    onStop={stopTimer}
-                                    isPending={isPending}
-                                  />
-                                ))}
-                              </div>
-                            </>
-                          )}
-                        </>
-                      )}
-                    </>
-                  );
-                }}
-              </Await>
-            </Suspense>
+                        {activeTab === "tasks" && (
+                          <>
+                            {!googleConnected ? (
+                              <EmptyState icon={ListTodo} title="Google Tasks not connected" sub="Connect your Google account in Settings to see your tasks here." />
+                            ) : data.googleTasks.length === 0 ? (
+                              <EmptyState icon={ListTodo} title="No pending tasks" sub="No pending tasks in Google Tasks." />
+                            ) : (
+                              <>
+                                <p className="text-sm font-semibold mb-1">Google Tasks</p>
+                                <p className="text-xs text-muted-foreground mb-5">Select a task and choose a Basecamp project to start tracking.</p>
+                                <div className="flex flex-col gap-2.5">
+                                  {data.googleTasks.map((task: GoogleTask) => (
+                                    <GoogleEventCard
+                                      key={task.id}
+                                      item={task}
+                                      source="GOOGLE_TASKS"
+                                      projects={data.timesheetProjects}
+                                      isActive={activeTimer?.todoId === task.id}
+                                      onStart={startTimer}
+                                      onStop={stopTimer}
+                                      isPending={isPending}
+                                    />
+                                  ))}
+                                </div>
+                              </>
+                            )}
+                          </>
+                        )}
+                      </>
+                    );
+                  }}
+                </Await>
+              </Suspense>
             )}
           </div>
 
-          {/* RIGHT TIMER PANEL — sticky so it stays in view while content scrolls */}
           <div className="sticky top-13 h-[calc(100vh-52px)] shrink-0">
             <TimerPanel activeTimer={activeTimer} elapsed={elapsed} onStop={stopTimer} isPending={isPending} />
           </div>
