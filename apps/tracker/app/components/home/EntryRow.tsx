@@ -41,9 +41,11 @@ export function EntryRow({
       <div className="flex items-stretch">
         <div className={cn("w-1 shrink-0", SOURCE_BAR[e.source] ?? "bg-muted-foreground")} />
         <div className="flex flex-1 items-center gap-3.5 px-4 py-3 min-w-0">
-          <div className="w-16 shrink-0">
-            <p className="font-mono text-[13px] font-medium text-foreground leading-none">
+          <div className="w-24 shrink-0">
+            <p className="font-mono text-[12px] font-medium text-foreground leading-none">
               {new Date(e.startedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+              {" – "}
+              {new Date(e.stoppedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
             </p>
             <p className="text-[10px] text-muted-foreground mt-0.5">{fmtDurationShort(e.durationSec)}</p>
           </div>

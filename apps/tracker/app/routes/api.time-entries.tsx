@@ -68,7 +68,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
           ...(statusParam !== "all" && statusMap[statusParam] && { syncStatus: statusMap[statusParam] }),
           ...(sourceParam !== "all" && srcMap[sourceParam] && { source: srcMap[sourceParam] }),
         },
-        orderBy: { startedAt: "asc" },
+        orderBy: { startedAt: "desc" },
         select: {
           id: true, todoTitle: true, projectName: true,
           startedAt: true, stoppedAt: true, durationSec: true,
