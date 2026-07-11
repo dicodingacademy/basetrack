@@ -10,7 +10,7 @@ import { getRules, saveRule, deleteRule, updateUserTimezone, replaceAllRules } f
 import { prisma } from "../utils/db.server";
 import { randomUUID } from "node:crypto";
 import { registry } from "../integrations/registry";
-import { getValidToken, disconnectProvider, getConnectedProviders } from "../integrations/token.server";
+import { disconnectProvider, getConnectedProviders } from "../integrations/token.server";
 import type { TrackableItem } from "../integrations/types";
 
 import { cn } from "../lib/utils";
@@ -74,8 +74,13 @@ type AppData = {
   projects: { id: string; name: string; taskCount: number }[];
   pendingApprovals: TimeEntry[];
   timesheetProjects: { id: string; name: string }[];
-  providerItems: Record<string, TrackableItem[]>;
 };
+
+type TabState =
+  | { status: "idle" }
+  | { status: "loading" }
+  | { status: "success"; items: TrackableItem[] }
+  | { status: "error" };
 
 export function shouldRevalidate({ formAction }: { formAction?: string }) {
   if (formAction?.startsWith("/api/")) return false;
@@ -91,7 +96,6 @@ export function meta(_args: Route.MetaArgs) {
 
 async function loadData(
   user: NonNullable<Awaited<ReturnType<typeof getUserFromSessionId>>>,
-  connectedProviderIds: string[],
 ): Promise<AppData> {
   let projects: { id: string; name: string; taskCount: number }[] = [];
 
@@ -115,30 +119,7 @@ async function loadData(
   const pendingApprovals = await getPendingApprovals(user.id);
   const timesheetProjects = projects.map(p => ({ id: p.id, name: p.name }));
 
-  const providerItems: Record<string, TrackableItem[]> = {};
-
-  for (const providerId of connectedProviderIds) {
-    const provider = registry[providerId];
-    if (!provider) continue;
-    try {
-      const accessToken = await getValidToken(user.id, providerId);
-      for (const tab of provider.tabs) {
-        try {
-          providerItems[tab.id] = await tab.fetchItems(accessToken);
-        } catch (err) {
-          console.error(`Failed to fetch ${tab.id}:`, err);
-          providerItems[tab.id] = [];
-        }
-      }
-    } catch (err) {
-      console.error(`Failed to get token for ${providerId}:`, err);
-      for (const tab of provider.tabs) {
-        providerItems[tab.id] = [];
-      }
-    }
-  }
-
-  return { projects, pendingApprovals, timesheetProjects, providerItems };
+  return { projects, pendingApprovals, timesheetProjects };
 }
 
 export async function loader({ request }: Route.LoaderArgs) {
@@ -191,7 +172,7 @@ export async function loader({ request }: Route.LoaderArgs) {
     activeTimer,
     rules: rules.map(r => ({ ...r, conditions: r.conditions as unknown as Condition[] })),
     wsUrl: process.env.WS_PUBLIC_URL || "ws://localhost:8081",
-    data: loadData(user!, connectedProviderIds),
+    data: loadData(user!),
   };
 }
 
@@ -276,6 +257,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 
   const [activeTab, setActiveTab] = useState<string>("basecamp");
   const [openGroups, setOpenGroups] = useState<Set<string>>(() => new Set());
+  const [tabItems, setTabItems] = useState<Record<string, TabState>>({});
 
   useEffect(() => {
     const validTabs = new Set(["basecamp", "history", ...allProviderTabs.map(t => t.tabId)]);
@@ -317,6 +299,17 @@ export default function Home({ loaderData }: Route.ComponentProps) {
     } finally {
       setIsLoadingTasks(false);
     }
+  };
+
+  const handleTabClick = (tabId: string) => {
+    setActiveTab(tabId);
+    if (tabId === "basecamp" || tabId === "history") return;
+    if (tabItems[tabId]) return;
+    setTabItems(prev => ({ ...prev, [tabId]: { status: "loading" } }));
+    fetch(`/api/provider-items?tab=${tabId}`)
+      .then(r => r.json())
+      .then(({ items }) => setTabItems(prev => ({ ...prev, [tabId]: { status: "success", items } })))
+      .catch(() => setTabItems(prev => ({ ...prev, [tabId]: { status: "error" } })));
   };
 
   if (!user) {
@@ -405,7 +398,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
                         const Icon = TAB_ICONS[tab.iconName];
                         return (
                           <SidebarMenuItem key={tab.tabId}>
-                            <SidebarMenuButton isActive={activeTab === tab.tabId} onClick={() => setActiveTab(tab.tabId)} tooltip={tab.label}>
+                            <SidebarMenuButton isActive={activeTab === tab.tabId} onClick={() => handleTabClick(tab.tabId)} tooltip={tab.label}>
                               {Icon && <Icon className="size-4 shrink-0" />}
                               <span className="truncate">{tab.label}</span>
                             </SidebarMenuButton>
@@ -635,9 +628,14 @@ export default function Home({ loaderData }: Route.ComponentProps) {
                         )}
 
                         {activeTab !== "basecamp" && (() => {
-                          const items = data.providerItems[activeTab] ?? [];
                           const tab = allProviderTabs.find(t => t.tabId === activeTab);
                           if (!tab) return null;
+                          const state = tabItems[activeTab] ?? { status: "idle" };
+                          if (state.status === "idle" || state.status === "loading") return <ContentSkeleton />;
+                          if (state.status === "error") return (
+                            <EmptyState icon={CheckCircle2} title="Failed to load" sub="Could not fetch items. Try switching tabs." />
+                          );
+                          const items = state.items;
                           if (items.length === 0) return (
                             <EmptyState icon={CheckCircle2} title="No items" sub="Nothing to track right now." />
                           );
