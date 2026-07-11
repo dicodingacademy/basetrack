@@ -275,9 +275,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
   const TASKS_PER_PAGE = 8;
 
   const [activeTab, setActiveTab] = useState<string>("basecamp");
-  const [openGroups, setOpenGroups] = useState<Set<string>>(
-    () => new Set((providerGroups ?? []).map(g => g.providerId))
-  );
+  const [openGroups, setOpenGroups] = useState<Set<string>>(() => new Set());
 
   useEffect(() => {
     const validTabs = new Set(["basecamp", "history", ...allProviderTabs.map(t => t.tabId)]);
@@ -385,6 +383,9 @@ export default function Home({ loaderData }: Route.ComponentProps) {
               <SidebarGroup key={group.providerId}>
                 <SidebarGroupLabel className="pr-8">
                   {group.providerLabel}
+                  <Badge variant="secondary" className="ml-1.5 font-mono text-[10px] px-1.5 py-0">
+                    {group.tabs.length}
+                  </Badge>
                 </SidebarGroupLabel>
                 <SidebarGroupAction
                   onClick={() => setOpenGroups(prev => {
@@ -395,7 +396,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
                   })}
                   aria-label={isOpen ? "Collapse" : "Expand"}
                 >
-                  <ChevronDown className={cn("size-3.5 transition-transform duration-200", !isOpen && "-rotate-90")} />
+                  <ChevronDown className={cn("size-3.5 transition-transform duration-200", isOpen ? "rotate-0" : "-rotate-90")} />
                 </SidebarGroupAction>
                 {isOpen && (
                   <SidebarGroupContent>
