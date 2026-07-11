@@ -71,7 +71,7 @@ export function ProjectPickerModal({ projects, onSelect, children }: ProjectPick
                 {checkingId === project.id ? (
                   <Loader2 className="w-4 h-4 shrink-0 animate-spin" />
                 ) : (
-                  <Briefcase className="w-4 h-4 text-blue-500 shrink-0" />
+                  <Briefcase className="w-4 h-4 text-muted-foreground shrink-0" />
                 )}
                 <span className="text-sm font-medium truncate">{project.name}</span>
               </Button>
