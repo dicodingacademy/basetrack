@@ -24,7 +24,7 @@ export const links: Route.LinksFunction = () => [
   },
 ];
 
-const THEME_SCRIPT = `(function(){var t=localStorage.getItem('theme');var d=window.matchMedia('(prefers-color-scheme:dark)').matches;if(t==='dark'||(t!=='light'&&d)){document.documentElement.classList.add('dark');}})();`;
+const THEME_SCRIPT = `(function(){var t=localStorage.getItem('theme');if(t!=='light'){document.documentElement.classList.add('dark');}})();`;
 
 export function Layout({ children }: { children: React.ReactNode }) {
   return (
