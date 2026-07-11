@@ -9,6 +9,6 @@ export default [
   route("auth/basecamp", "routes/auth.basecamp.tsx"),
   route("auth/callback", "routes/auth.callback.tsx"),
   route("auth/logout", "routes/auth.logout.tsx"),
-  route("auth/google", "routes/auth.google.tsx"),
-  route("auth/google/callback", "routes/auth.google.callback.tsx"),
+  route("auth/:provider", "routes/auth.$provider.tsx"),
+  route("auth/:provider/callback", "routes/auth.$provider.callback.tsx"),
 ] satisfies RouteConfig;
