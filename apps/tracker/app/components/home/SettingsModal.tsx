@@ -13,8 +13,9 @@ import {
 import { Input } from "../ui/input";
 import { Label } from "../ui/label";
 import { RuleList } from "./RuleList";
-import { Settings, Loader2, CheckCircle2, XCircle, Sun, Moon, LogOut } from "lucide-react";
+import { Settings, Loader2, CheckCircle2, XCircle, LogOut } from "lucide-react";
 import { useTheme } from "../../hooks/useTheme";
+import { cn } from "~/lib/utils";
 import type { AutoStopRuleData } from "./types";
 
 type SettingsModalProps = {
@@ -25,10 +26,18 @@ type SettingsModalProps = {
   availableProviders: { id: string; label: string; scopes: string }[];
 };
 
+const THEMES = [
+  { id: "light",    label: "Cream",    dot: "#f4813f", bg: "#faf7f4" },
+  { id: "dark",     label: "Dark",     dot: "#f4813f", bg: "#1e2228" },
+  { id: "ocean",    label: "Ocean",    dot: "#38bdf8", bg: "#0f1923" },
+  { id: "forest",   label: "Forest",   dot: "#4ade80", bg: "#0f1a12" },
+  { id: "lavender", label: "Lavender", dot: "#818cf8", bg: "#f4f0fb" },
+] as const;
+
 export function SettingsModal({ rules: initialRules, userTimezone, apiKey, connectedProviders, availableProviders }: SettingsModalProps) {
   const [open, setOpen] = useState(false);
   const fetcher = useFetcher();
-  const { theme, toggle: toggleTheme } = useTheme();
+  const { theme, setTheme } = useTheme();
   const [localRules, setLocalRules] = useState<AutoStopRuleData[]>(initialRules);
   const isSaving = fetcher.state !== "idle";
 
@@ -131,26 +140,26 @@ export function SettingsModal({ rules: initialRules, userTimezone, apiKey, conne
 
           <div className="border-t pt-4">
             <h4 className="text-sm font-medium mb-3">Appearance</h4>
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm">Theme</p>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  {theme === "dark" ? "Dark mode" : "Light mode"}
-                </p>
-              </div>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={toggleTheme}
-                className="gap-2"
-              >
-                {theme === "dark" ? (
-                  <><Sun className="size-3.5" /> Light</>
-                ) : (
-                  <><Moon className="size-3.5" /> Dark</>
-                )}
-              </Button>
+            <div className="flex flex-wrap gap-2">
+              {THEMES.map(t => (
+                <button
+                  key={t.id}
+                  type="button"
+                  onClick={() => setTheme(t.id)}
+                  className={cn(
+                    "flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs border transition-colors cursor-pointer",
+                    theme === t.id
+                      ? "border-primary bg-primary/10 font-medium"
+                      : "border-border hover:border-muted-foreground"
+                  )}
+                >
+                  <span
+                    className="size-3 rounded-full flex-shrink-0"
+                    style={{ background: `linear-gradient(135deg, ${t.bg} 50%, ${t.dot} 50%)` }}
+                  />
+                  {t.label}
+                </button>
+              ))}
             </div>
           </div>
 
