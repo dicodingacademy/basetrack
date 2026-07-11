@@ -1,16 +1,17 @@
 import { useState, useEffect, Suspense } from "react";
-import { Form, Await } from "react-router";
+import { Await } from "react-router";
 
 import type { Route } from "./+types/home";
 import { getSession, getUserFromSessionId } from "../utils/session.server";
 import { fetchAssignments, getValidAccessToken } from "../utils/basecamp.server";
-import { getValidGoogleToken, fetchCalendarEvents, fetchTaskLists, fetchTasks } from "../utils/google.server";
 import { getActiveTimer, getPendingApprovals, approveTimeEntry } from "../services/timer.server";
 import { generateNewApiKey } from "../services/user.server";
 import { getRules, saveRule, deleteRule, updateUserTimezone, replaceAllRules } from "../services/rules.server";
-import { disconnectGoogle } from "../utils/google.server";
 import { prisma } from "../utils/db.server";
 import { randomUUID } from "node:crypto";
+import { registry } from "../integrations/registry";
+import { getValidToken, disconnectProvider, getConnectedProviders } from "../integrations/token.server";
+import type { TrackableItem } from "../integrations/types";
 
 import { cn } from "../lib/utils";
 import { fmtTime } from "../lib/format";
@@ -39,11 +40,11 @@ import {
 
 import { useTimerWebSocket } from "../hooks/useTimerWebSocket";
 import { useTimerTitle } from "../hooks/useTimerTitle";
-import { ProjectPickerModal } from "../components/home/ProjectPickerModal";
 import { PendingApprovals } from "../components/home/PendingApprovals";
 import { SettingsModal } from "../components/home/SettingsModal";
 import { ContentSkeleton, EmptyState } from "../components/home/ContentSkeleton";
-import { BasecampTaskCard, GoogleEventCard } from "../components/home/EventCard";
+import { BasecampTaskCard } from "../components/home/EventCard";
+import { TrackableItemCard } from "../components/home/TrackableItemCard";
 import { TimerPanel } from "../components/home/TimerPanel";
 import { HistoryPanel } from "../components/home/HistoryPanel";
 
@@ -59,16 +60,19 @@ import {
 } from "lucide-react";
 
 import type { BasecampAssignment, GroupedTask } from "../types/basecamp";
-import type { GoogleCalendarEvent, GoogleTask } from "../types/google";
 import type { Condition } from "../components/home/types";
 import type { TimeEntry, Prisma } from "@prisma/client";
+
+const TAB_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
+  Calendar,
+  ListTodo,
+};
 
 type AppData = {
   projects: { id: string; name: string; taskCount: number }[];
   pendingApprovals: TimeEntry[];
   timesheetProjects: { id: string; name: string }[];
-  calendarEvents: GoogleCalendarEvent[];
-  googleTasks: GoogleTask[];
+  providerItems: Record<string, TrackableItem[]>;
 };
 
 export function shouldRevalidate({ formAction }: { formAction?: string }) {
@@ -83,7 +87,10 @@ export function meta(_args: Route.MetaArgs) {
   ];
 }
 
-async function loadData(user: NonNullable<Awaited<ReturnType<typeof getUserFromSessionId>>>): Promise<AppData> {
+async function loadData(
+  user: NonNullable<Awaited<ReturnType<typeof getUserFromSessionId>>>,
+  connectedProviderIds: string[],
+): Promise<AppData> {
   let projects: { id: string; name: string; taskCount: number }[] = [];
 
   try {
@@ -106,59 +113,30 @@ async function loadData(user: NonNullable<Awaited<ReturnType<typeof getUserFromS
   const pendingApprovals = await getPendingApprovals(user.id);
   const timesheetProjects = projects.map(p => ({ id: p.id, name: p.name }));
 
-  let calendarEvents: GoogleCalendarEvent[] = [];
-  let googleTasks: GoogleTask[] = [];
+  const providerItems: Record<string, TrackableItem[]> = {};
 
-  if (user.googleAccessToken) {
+  for (const providerId of connectedProviderIds) {
+    const provider = registry[providerId];
+    if (!provider) continue;
     try {
-      const googleToken = await getValidGoogleToken(user.id);
-      const events = await fetchCalendarEvents(googleToken, new Date());
-      calendarEvents = (events || []).map(e => ({
-        id: e.id,
-        summary: e.summary || "Untitled Event",
-        description: e.description,
-        htmlLink: e.htmlLink,
-        start: e.start,
-        end: e.end,
-      }));
-    } catch (err) {
-      console.error("Failed to fetch calendar events:", err);
-    }
-
-    try {
-      const googleToken = await getValidGoogleToken(user.id);
-      const taskLists = await fetchTaskLists(googleToken);
-      const allTasks: GoogleTask[] = [];
-      const endOfToday = new Date();
-      endOfToday.setHours(23, 59, 59, 999);
-      for (const list of taskLists) {
+      const accessToken = await getValidToken(user.id, providerId);
+      for (const tab of provider.tabs) {
         try {
-          const tasks = await fetchTasks(googleToken, list.id);
-          for (const t of tasks) {
-            const mappedTask = {
-              id: t.id,
-              title: t.title || "Untitled Task",
-              notes: t.notes,
-              due: t.due,
-              taskListId: list.id,
-              taskListName: list.title,
-            };
-            if (t.due) {
-              const dueDate = new Date(t.due);
-              if (dueDate <= endOfToday) allTasks.push(mappedTask);
-            }
-          }
+          providerItems[tab.id] = await tab.fetchItems(accessToken);
         } catch (err) {
-          console.error(`Failed to fetch tasks for list ${list.title}:`, err);
+          console.error(`Failed to fetch ${tab.id}:`, err);
+          providerItems[tab.id] = [];
         }
       }
-      googleTasks = allTasks;
     } catch (err) {
-      console.error("Failed to fetch task lists:", err);
+      console.error(`Failed to get token for ${providerId}:`, err);
+      for (const tab of provider.tabs) {
+        providerItems[tab.id] = [];
+      }
     }
   }
 
-  return { projects, pendingApprovals, timesheetProjects, calendarEvents, googleTasks };
+  return { projects, pendingApprovals, timesheetProjects, providerItems };
 }
 
 export async function loader({ request }: Route.LoaderArgs) {
@@ -177,10 +155,18 @@ export async function loader({ request }: Route.LoaderArgs) {
     user = await getUserFromSessionId(sessionId);
   }
 
-  const activeTimer = await getActiveTimer(user!.id);
-  const rules = (await getRules(user!.id)).map((r) => ({
-    ...r,
-    conditions: r.conditions as unknown as Condition[],
+  const [activeTimer, rules, connectedProviderIds] = await Promise.all([
+    getActiveTimer(user!.id),
+    getRules(user!.id),
+    getConnectedProviders(user!.id),
+  ]);
+
+  const providerTabs = connectedProviderIds.flatMap(id =>
+    registry[id]?.tabs.map(tab => ({ tabId: tab.id, label: tab.label, iconName: tab.iconName })) ?? []
+  );
+
+  const availableProviders = Object.values(registry).map(p => ({
+    id: p.id, label: p.label, scopes: p.scopes,
   }));
 
   return {
@@ -191,11 +177,13 @@ export async function loader({ request }: Route.LoaderArgs) {
       timezone: user!.timezone,
       apiKey: user!.apiKey,
     },
-    googleConnected: !!user!.googleAccessToken,
+    connectedProviders: connectedProviderIds,
+    providerTabs,
+    availableProviders,
     activeTimer,
-    rules,
+    rules: rules.map(r => ({ ...r, conditions: r.conditions as unknown as Condition[] })),
     wsUrl: process.env.WS_PUBLIC_URL || "ws://localhost:8081",
-    data: loadData(user!),
+    data: loadData(user!, connectedProviderIds),
   };
 }
 
@@ -261,8 +249,10 @@ export async function action({ request }: Route.ActionArgs) {
     return { success: true };
   }
 
-  if (intent === "DISCONNECT_GOOGLE") {
-    await disconnectGoogle(user.id);
+  if (intent === "DISCONNECT") {
+    const provider = formData.get("provider") as string;
+    if (!provider) return new Response("Provider required", { status: 400 });
+    await disconnectProvider(user.id, provider);
     return { success: true };
   }
 
@@ -270,11 +260,16 @@ export async function action({ request }: Route.ActionArgs) {
 }
 
 export default function Home({ loaderData }: Route.ComponentProps) {
-  const { user, activeTimer: serverActiveTimer, wsUrl, googleConnected, rules } = loaderData;
+  const { user, activeTimer: serverActiveTimer, wsUrl, connectedProviders, providerTabs, availableProviders, rules } = loaderData;
 
   const TASKS_PER_PAGE = 8;
 
-  const [activeTab, setActiveTab] = useState<"basecamp" | "calendar" | "tasks" | "history">("basecamp");
+  const [activeTab, setActiveTab] = useState<string>("basecamp");
+
+  useEffect(() => {
+    const validTabs = new Set(["basecamp", "history", ...(providerTabs ?? []).map(t => t.tabId)]);
+    if (!validTabs.has(activeTab)) setActiveTab("basecamp");
+  }, [providerTabs]);
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [tasksCache, setTasksCache] = useState<Record<string, GroupedTask[]>>({});
   const [isLoadingTasks, setIsLoadingTasks] = useState(false);
@@ -367,18 +362,17 @@ export default function Home({ loaderData }: Route.ComponentProps) {
                     <span className="truncate">Basecamp</span>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
-                <SidebarMenuItem>
-                  <SidebarMenuButton isActive={activeTab === "calendar"} onClick={() => setActiveTab("calendar")} tooltip="Calendar">
-                    <Calendar className="size-4 shrink-0" />
-                    <span className="truncate">Calendar</span>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-                <SidebarMenuItem>
-                  <SidebarMenuButton isActive={activeTab === "tasks"} onClick={() => setActiveTab("tasks")} tooltip="Google Tasks">
-                    <ListTodo className="size-4 shrink-0" />
-                    <span className="truncate">Tasks</span>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
+                {providerTabs.map(tab => {
+                  const Icon = TAB_ICONS[tab.iconName];
+                  return (
+                    <SidebarMenuItem key={tab.tabId}>
+                      <SidebarMenuButton isActive={activeTab === tab.tabId} onClick={() => setActiveTab(tab.tabId)} tooltip={tab.label}>
+                        {Icon && <Icon className="size-4 shrink-0" />}
+                        <span className="truncate">{tab.label}</span>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  );
+                })}
               </SidebarMenu>
             </SidebarGroupContent>
           </SidebarGroup>
@@ -461,7 +455,8 @@ export default function Home({ loaderData }: Route.ComponentProps) {
                     rules={rules}
                     userTimezone={user.timezone ?? "Asia/Jakarta"}
                     apiKey={user.apiKey}
-                    googleConnected={googleConnected}
+                    connectedProviders={connectedProviders}
+                    availableProviders={availableProviders}
                   />
                 </div>
               </SidebarMenuButton>
@@ -475,7 +470,11 @@ export default function Home({ loaderData }: Route.ComponentProps) {
           <SidebarTrigger className="-ml-1" />
           <div className="w-px h-4 bg-border" />
           <span className="text-xs text-muted-foreground">{activeTab === "history" ? "Logs /" : "Source /"}</span>
-          <span className="text-sm font-semibold capitalize">{activeTab}</span>
+          <span className="text-sm font-semibold">
+            {activeTab === "basecamp" ? "Basecamp"
+              : activeTab === "history" ? "History"
+              : providerTabs.find(t => t.tabId === activeTab)?.label ?? activeTab}
+          </span>
           <div className="w-px h-4 bg-border" />
           <span className="font-mono text-xs text-muted-foreground">{today}</span>
           <div className={cn(
@@ -593,63 +592,33 @@ export default function Home({ loaderData }: Route.ComponentProps) {
                           </>
                         )}
 
-                        {activeTab === "calendar" && (
-                          <>
-                            {!googleConnected ? (
-                              <EmptyState icon={Calendar} title="Google Calendar not connected" sub="Connect your Google account in Settings to see your calendar events here." />
-                            ) : data.calendarEvents.length === 0 ? (
-                              <EmptyState icon={Calendar} title="No events today" sub="No calendar events scheduled for today." />
-                            ) : (
-                              <>
-                                <p className="text-sm font-semibold mb-1">Today's Events</p>
-                                <p className="text-xs text-muted-foreground mb-5">Select an event and choose a Basecamp project to start tracking.</p>
-                                <div className="flex flex-col gap-2.5">
-                                  {data.calendarEvents.map((event: GoogleCalendarEvent) => (
-                                    <GoogleEventCard
-                                      key={event.id}
-                                      item={event}
-                                      source="GOOGLE_CALENDAR"
-                                      projects={data.timesheetProjects}
-                                      isActive={activeTimer?.todoId === event.id}
-                                      onStart={startTimer}
-                                      onStop={stopTimer}
-                                      isPending={isPending}
-                                    />
-                                  ))}
-                                </div>
-                              </>
-                            )}
-                          </>
-                        )}
-
-                        {activeTab === "tasks" && (
-                          <>
-                            {!googleConnected ? (
-                              <EmptyState icon={ListTodo} title="Google Tasks not connected" sub="Connect your Google account in Settings to see your tasks here." />
-                            ) : data.googleTasks.length === 0 ? (
-                              <EmptyState icon={ListTodo} title="No pending tasks" sub="No pending tasks in Google Tasks." />
-                            ) : (
-                              <>
-                                <p className="text-sm font-semibold mb-1">Google Tasks</p>
-                                <p className="text-xs text-muted-foreground mb-5">Select a task and choose a Basecamp project to start tracking.</p>
-                                <div className="flex flex-col gap-2.5">
-                                  {data.googleTasks.map((task: GoogleTask) => (
-                                    <GoogleEventCard
-                                      key={task.id}
-                                      item={task}
-                                      source="GOOGLE_TASKS"
-                                      projects={data.timesheetProjects}
-                                      isActive={activeTimer?.todoId === task.id}
-                                      onStart={startTimer}
-                                      onStop={stopTimer}
-                                      isPending={isPending}
-                                    />
-                                  ))}
-                                </div>
-                              </>
-                            )}
-                          </>
-                        )}
+                        {activeTab !== "basecamp" && (() => {
+                          const items = data.providerItems[activeTab] ?? [];
+                          const tab = providerTabs.find(t => t.tabId === activeTab);
+                          if (!tab) return null;
+                          if (items.length === 0) return (
+                            <EmptyState icon={CheckCircle2} title="No items" sub="Nothing to track right now." />
+                          );
+                          return (
+                            <>
+                              <p className="text-sm font-semibold mb-1">{tab.label}</p>
+                              <p className="text-xs text-muted-foreground mb-5">Select an item and choose a Basecamp project to start tracking.</p>
+                              <div className="flex flex-col gap-2.5">
+                                {items.map(item => (
+                                  <TrackableItemCard
+                                    key={item.id}
+                                    item={item}
+                                    projects={data.timesheetProjects}
+                                    isActive={activeTimer?.todoId === item.id}
+                                    onStart={startTimer}
+                                    onStop={stopTimer}
+                                    isPending={isPending}
+                                  />
+                                ))}
+                              </div>
+                            </>
+                          );
+                        })()}
                       </>
                     );
                   }}
