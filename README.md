@@ -31,6 +31,7 @@ Basetrack solves the friction of tracking time directly inside Basecamp. Instead
 | Data Persistence | Cloud only | Local PostgreSQL cache & sync |
 | Multi-tab Sync | No | Yes — Instant via WebSocket |
 | Desktop Widget | No | Yes — Native always-on-top companion app |
+| Third-party Integrations | No | Yes — Google Calendar & Tasks; extensible provider system |
 
 <details>
 <summary>Table of contents</summary>
@@ -40,6 +41,7 @@ Basetrack solves the friction of tracking time directly inside Basecamp. Instead
 - [Prerequisites](#prerequisites)
 - [Installation](#installation)
 - [Workspace Structure](#workspace-structure)
+- [Integrations](#integrations)
 - [Contributing](#contributing)
 
 </details>
@@ -51,21 +53,23 @@ Basetrack solves the friction of tracking time directly inside Basecamp. Instead
 Basetrack utilizes a modern monorepo architecture divided into distinct micro-apps and packages, running on Node.js and PostgreSQL.
 
 ```
-┌────────────────────┐   ┌──────────────────────────┐   ┌────────────────────┐
-│  React Router v8   │◄──┤  WebSocket Server (WS)   ├──►│ Tauri Desktop App  │
-│  (Tracker App)     │   │   (Instant Sync Hub)     │   │  (Companion UI)    │
-│                    │   └──────────────────────────┘   └────────────────────┘
-│  - Auth (OAuth2)   │                ▲                            
-│  - API routes      │                │                            
-│  - Prisma Client   │   ┌────────────┴─────────────┐              
-└─────────┬──────────┘   │     Worker / Cron        │              
-          │              │   (Standalone service)   │              
-          │              └────────────┬─────────────┘              
-          ▼                           │
-┌─────────────────────────────────────┴─┐
-│          PostgreSQL (Prisma)          │
-│          (Database package)           │
-└───────────────────────────────────────┘
+┌─────────────────────────┐   ┌──────────────────────────┐   ┌────────────────────┐
+│    React Router v7      │◄──┤  WebSocket Server (WS)   ├──►│ Tauri Desktop App  │
+│    (Tracker App)        │   │   (Instant Sync Hub)     │   │  (Companion UI)    │
+│                         │   └──────────────────────────┘   └────────────────────┘
+│  - Auth (OAuth2)        │                ▲
+│  - Integration layer    │                │
+│    ├─ OAuthProvider     │   ┌────────────┴─────────────┐
+│    ├─ TokenService      │   │     Worker / Cron        │
+│    └─ Provider registry │   │   (Standalone service)   │
+│  - API routes           │   └────────────┬─────────────┘
+│  - Prisma Client        │                │
+└──────────┬──────────────┘                │
+           ▼                               ▼
+┌──────────────────────────────────────────┐
+│           PostgreSQL (Prisma)            │
+│           (Database package)             │
+└──────────────────────────────────────────┘
 ```
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
@@ -115,6 +119,13 @@ SESSION_SECRET="your-super-secret-session-key"
 BASECAMP_CLIENT_ID="your-basecamp-client-id"
 BASECAMP_CLIENT_SECRET="your-basecamp-client-secret"
 BASECAMP_REDIRECT_URI="http://localhost:5173/auth/basecamp/callback"
+
+# Google OAuth2 Credentials (optional — enables Google Calendar & Tasks integration)
+# Create at https://console.cloud.google.com → APIs & Services → Credentials
+# Required scopes: calendar.readonly, tasks.readonly
+GOOGLE_CLIENT_ID="your-google-client-id"
+GOOGLE_CLIENT_SECRET="your-google-client-secret"
+GOOGLE_REDIRECT_URI="http://localhost:5173/auth/google/callback"
 
 # The public URL where the WebSocket server is accessible by the Web/Desktop client
 WS_PUBLIC_URL="ws://localhost:8081"
@@ -190,6 +201,28 @@ This project uses npm workspaces to manage dependencies across multiple packages
 | `@basetrack/ws` | `apps/ws` | Standalone WebSocket Server for real-time timer sync across web and desktop. |
 | `@basetrack/cron` | `apps/cron` | Background Node.js worker. Checks for orphaned timers and marks them for manual approval. |
 | `@basetrack/db` | `packages/db` | Shared Prisma ORM layer. Contains `schema.prisma`, migrations, and generated client. |
+
+<p align="right">(<a href="#readme-top">back to top</a>)</p>
+
+## Integrations
+
+Basetrack supports third-party integrations via a provider registry. Each provider is self-contained — it defines its OAuth flow, scopes, sidebar tabs, and how to map its API responses to trackable items.
+
+**Built-in providers:**
+
+| Provider | Tabs | Items |
+|---|---|---|
+| Google | Calendar, Tasks | Today's events and overdue tasks |
+
+**Adding a new provider** takes exactly 3 file changes: a new provider class, one registry line, and one icon mapping. The auth routes, DB token storage, and sidebar UI are all generic — they don't need to change.
+
+Engineers can use the `basetrack-add-provider` Claude Code skill for a step-by-step guide:
+
+```
+/basetrack-add-provider
+```
+
+The skill lives at `.claude/skills/basetrack-add-provider/SKILL.md`.
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
