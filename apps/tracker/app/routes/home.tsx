@@ -25,6 +25,7 @@ import {
   SidebarContent,
   SidebarFooter,
   SidebarGroup,
+  SidebarGroupAction,
   SidebarGroupContent,
   SidebarGroupLabel,
   SidebarHeader,
@@ -54,6 +55,7 @@ import {
   ListTodo,
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
   CheckCircle2,
   ArrowRight,
   History,
@@ -161,9 +163,15 @@ export async function loader({ request }: Route.LoaderArgs) {
     getConnectedProviders(user!.id),
   ]);
 
-  const providerTabs = connectedProviderIds.flatMap(id =>
-    registry[id]?.tabs.map(tab => ({ tabId: tab.id, label: tab.label, iconName: tab.iconName })) ?? []
-  );
+  const providerGroups = connectedProviderIds.flatMap(id => {
+    const p = registry[id];
+    if (!p) return [];
+    return [{
+      providerId: id,
+      providerLabel: p.label,
+      tabs: p.tabs.map(tab => ({ tabId: tab.id, label: tab.label, iconName: tab.iconName })),
+    }];
+  });
 
   const availableProviders = Object.values(registry).map(p => ({
     id: p.id, label: p.label, scopes: p.scopes,
@@ -178,7 +186,7 @@ export async function loader({ request }: Route.LoaderArgs) {
       apiKey: user!.apiKey,
     },
     connectedProviders: connectedProviderIds,
-    providerTabs,
+    providerGroups,
     availableProviders,
     activeTimer,
     rules: rules.map(r => ({ ...r, conditions: r.conditions as unknown as Condition[] })),
@@ -260,16 +268,21 @@ export async function action({ request }: Route.ActionArgs) {
 }
 
 export default function Home({ loaderData }: Route.ComponentProps) {
-  const { user, activeTimer: serverActiveTimer, wsUrl, connectedProviders, providerTabs, availableProviders, rules } = loaderData;
+  const { user, activeTimer: serverActiveTimer, wsUrl, connectedProviders, providerGroups, availableProviders, rules } = loaderData;
+
+  const allProviderTabs = (providerGroups ?? []).flatMap(g => g.tabs);
 
   const TASKS_PER_PAGE = 8;
 
   const [activeTab, setActiveTab] = useState<string>("basecamp");
+  const [openGroups, setOpenGroups] = useState<Set<string>>(
+    () => new Set((providerGroups ?? []).map(g => g.providerId))
+  );
 
   useEffect(() => {
-    const validTabs = new Set(["basecamp", "history", ...(providerTabs ?? []).map(t => t.tabId)]);
+    const validTabs = new Set(["basecamp", "history", ...allProviderTabs.map(t => t.tabId)]);
     if (!validTabs.has(activeTab)) setActiveTab("basecamp");
-  }, [providerTabs]);
+  }, [providerGroups]);
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [tasksCache, setTasksCache] = useState<Record<string, GroupedTask[]>>({});
   const [isLoadingTasks, setIsLoadingTasks] = useState(false);
@@ -362,20 +375,48 @@ export default function Home({ loaderData }: Route.ComponentProps) {
                     <span className="truncate">Basecamp</span>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
-                {providerTabs.map(tab => {
-                  const Icon = TAB_ICONS[tab.iconName];
-                  return (
-                    <SidebarMenuItem key={tab.tabId}>
-                      <SidebarMenuButton isActive={activeTab === tab.tabId} onClick={() => setActiveTab(tab.tabId)} tooltip={tab.label}>
-                        {Icon && <Icon className="size-4 shrink-0" />}
-                        <span className="truncate">{tab.label}</span>
-                      </SidebarMenuButton>
-                    </SidebarMenuItem>
-                  );
-                })}
               </SidebarMenu>
             </SidebarGroupContent>
           </SidebarGroup>
+
+          {(providerGroups ?? []).map(group => {
+            const isOpen = openGroups.has(group.providerId);
+            return (
+              <SidebarGroup key={group.providerId}>
+                <SidebarGroupLabel className="pr-8">
+                  {group.providerLabel}
+                </SidebarGroupLabel>
+                <SidebarGroupAction
+                  onClick={() => setOpenGroups(prev => {
+                    const next = new Set(prev);
+                    if (next.has(group.providerId)) next.delete(group.providerId);
+                    else next.add(group.providerId);
+                    return next;
+                  })}
+                  aria-label={isOpen ? "Collapse" : "Expand"}
+                >
+                  <ChevronDown className={cn("size-3.5 transition-transform duration-200", !isOpen && "-rotate-90")} />
+                </SidebarGroupAction>
+                {isOpen && (
+                  <SidebarGroupContent>
+                    <SidebarMenu>
+                      {group.tabs.map(tab => {
+                        const Icon = TAB_ICONS[tab.iconName];
+                        return (
+                          <SidebarMenuItem key={tab.tabId}>
+                            <SidebarMenuButton isActive={activeTab === tab.tabId} onClick={() => setActiveTab(tab.tabId)} tooltip={tab.label}>
+                              {Icon && <Icon className="size-4 shrink-0" />}
+                              <span className="truncate">{tab.label}</span>
+                            </SidebarMenuButton>
+                          </SidebarMenuItem>
+                        );
+                      })}
+                    </SidebarMenu>
+                  </SidebarGroupContent>
+                )}
+              </SidebarGroup>
+            );
+          })}
 
           <SidebarSeparator />
 
@@ -473,7 +514,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
           <span className="text-sm font-semibold">
             {activeTab === "basecamp" ? "Basecamp"
               : activeTab === "history" ? "History"
-              : providerTabs.find(t => t.tabId === activeTab)?.label ?? activeTab}
+              : allProviderTabs.find(t => t.tabId === activeTab)?.label ?? activeTab}
           </span>
           <div className="w-px h-4 bg-border" />
           <span className="font-mono text-xs text-muted-foreground">{today}</span>
@@ -594,7 +635,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 
                         {activeTab !== "basecamp" && (() => {
                           const items = data.providerItems[activeTab] ?? [];
-                          const tab = providerTabs.find(t => t.tabId === activeTab);
+                          const tab = allProviderTabs.find(t => t.tabId === activeTab);
                           if (!tab) return null;
                           if (items.length === 0) return (
                             <EmptyState icon={CheckCircle2} title="No items" sub="Nothing to track right now." />
