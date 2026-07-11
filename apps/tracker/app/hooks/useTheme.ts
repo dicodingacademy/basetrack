@@ -1,11 +1,20 @@
 import { useState, useEffect } from "react";
 
-type Theme = "light" | "dark";
+export type Theme = "light" | "dark" | "ocean" | "forest" | "lavender";
+
+const VALID_THEMES: Theme[] = ["light", "dark", "ocean", "forest", "lavender"];
+const THEME_CLASSES = ["dark", "theme-ocean", "theme-forest", "theme-lavender"];
+
+function getClassForTheme(theme: Theme): string | null {
+  if (theme === "light") return null;
+  if (theme === "dark") return "dark";
+  return `theme-${theme}`;
+}
 
 function getInitialTheme(): Theme {
   if (typeof window === "undefined") return "dark";
   const stored = localStorage.getItem("theme") as Theme | null;
-  if (stored === "light" || stored === "dark") return stored;
+  if (stored && VALID_THEMES.includes(stored)) return stored;
   return "dark";
 }
 
@@ -14,15 +23,11 @@ export function useTheme() {
 
   useEffect(() => {
     const root = document.documentElement;
-    if (theme === "dark") {
-      root.classList.add("dark");
-    } else {
-      root.classList.remove("dark");
-    }
+    THEME_CLASSES.forEach(c => root.classList.remove(c));
+    const cls = getClassForTheme(theme);
+    if (cls) root.classList.add(cls);
     localStorage.setItem("theme", theme);
   }, [theme]);
 
-  const toggle = () => setTheme(t => (t === "dark" ? "light" : "dark"));
-
-  return { theme, toggle };
+  return { theme, setTheme };
 }
