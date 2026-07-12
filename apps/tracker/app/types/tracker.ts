@@ -32,6 +32,10 @@ export type HistoryFetcherData = {
   weekEnd?: string;
   dailyTotals?: DailyTotal[];
   weekTotalSec?: number;
+  monthStart?: string;
+  monthEnd?: string;
+  monthParam?: string;
+  monthTotalSec?: number;
 };
 
 export type TodayFetcherData = {
