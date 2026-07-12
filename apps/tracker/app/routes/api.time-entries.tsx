@@ -129,6 +129,57 @@ export async function loader({ request }: LoaderFunctionArgs) {
     });
   }
 
+  if (mode === "monthly") {
+    const tz = user.timezone ?? "UTC";
+    const monthParam = url.searchParams.get("date") ?? new Date().toLocaleDateString("en-CA", { timeZone: tz }).slice(0, 7);
+    const [year, month] = monthParam.split("-").map(Number);
+
+    const firstDayStr = `${monthParam}-01`;
+    const { dayStart: monthStart } = getLocalDayBounds(firstDayStr, tz);
+
+    const lastDay = new Date(year, month, 0).getDate();
+    const lastDayStr = `${monthParam}-${String(lastDay).padStart(2, "0")}`;
+    const { dayEnd: monthEnd } = getLocalDayBounds(lastDayStr, tz);
+
+    const entries = await prisma.timeEntry.findMany({
+      where: { userId: user.id, startedAt: { gte: monthStart, lte: monthEnd } },
+      orderBy: { startedAt: "desc" },
+      select: {
+        id: true, todoTitle: true, projectName: true,
+        startedAt: true, stoppedAt: true, durationSec: true,
+        syncStatus: true, syncError: true, source: true,
+      },
+    });
+
+    const dailyMap: Record<string, { totalSec: number; count: number }> = {};
+    for (let d = 1; d <= lastDay; d++) {
+      dailyMap[`${monthParam}-${String(d).padStart(2, "0")}`] = { totalSec: 0, count: 0 };
+    }
+    for (const e of entries) {
+      const key = new Date(e.startedAt).toLocaleDateString("en-CA", { timeZone: tz });
+      if (dailyMap[key]) {
+        dailyMap[key].totalSec += e.durationSec;
+        dailyMap[key].count++;
+      }
+    }
+    const dailyTotals = Object.entries(dailyMap)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([date, v]) => ({ date, ...v }));
+
+    const monthTotalSec = entries.reduce((sum, e) => sum + e.durationSec, 0);
+
+    return data({
+      mode: "monthly",
+      monthStart: monthStart.toISOString(),
+      monthEnd: monthEnd.toISOString(),
+      monthParam,
+      entries,
+      total: entries.length,
+      monthTotalSec,
+      dailyTotals,
+    });
+  }
+
   // Legacy: page/status/source/from/to
   const page = Math.max(1, parseInt(url.searchParams.get("page") ?? "1"));
   const status = url.searchParams.get("status") ?? "all";
