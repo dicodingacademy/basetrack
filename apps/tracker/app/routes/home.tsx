@@ -16,6 +16,7 @@ import type { TrackableItem } from "../integrations/types";
 import { cn } from "../lib/utils";
 import { fmtTime } from "../lib/format";
 import { Button } from "../components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
 import { Badge } from "../components/ui/badge";
 import { Skeleton } from "../components/ui/skeleton";
 import { Avatar, AvatarFallback } from "../components/ui/avatar";
@@ -267,6 +268,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
   const [tasksCache, setTasksCache] = useState<Record<string, GroupedTask[]>>({});
   const [isLoadingTasks, setIsLoadingTasks] = useState(false);
   const [taskPage, setTaskPage] = useState(1);
+  const [groupFilter, setGroupFilter] = useState("");
   const [elapsed, setElapsed] = useState(0);
 
   const selectedProjectTasks = selectedProjectId ? tasksCache[selectedProjectId] ?? null : null;
@@ -288,6 +290,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
   const handleSelectProject = async (projectId: string) => {
     setSelectedProjectId(projectId);
     setTaskPage(1);
+    setGroupFilter("");
     if (tasksCache[projectId]) return;
     setIsLoadingTasks(true);
     try {
@@ -552,7 +555,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
                             ) : (
                               <>
                                 <button
-                                  onClick={() => { setSelectedProjectId(null); setTaskPage(1); }}
+                                  onClick={() => { setSelectedProjectId(null); setTaskPage(1); setGroupFilter(""); }}
                                   className="mb-4 flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
                                 >
                                   <ChevronLeft className="size-3.5" />
@@ -561,7 +564,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
                                 <p className="text-sm font-semibold mb-1">
                                   {data.projects.find(p => p.id === selectedProjectId)?.name}
                                 </p>
-                                <p className="text-xs text-muted-foreground mb-5">Select a task to start tracking.</p>
+                                <p className="text-xs text-muted-foreground mb-3">Select a task to start tracking.</p>
                                 {isLoadingTasks ? (
                                   <ContentSkeleton />
                                 ) : (selectedProjectTasks ?? []).length === 0 ? (
@@ -587,13 +590,21 @@ export default function Home({ loaderData }: Route.ComponentProps) {
                                   for (const [label, ts] of groupMap) grouped.push({ label, tasks: ts });
                                   if (noParent?.length) grouped.push({ label: "", tasks: noParent });
 
+                                  // Named groups only (exclude ungrouped) for the select
+                                  const namedGroups = grouped.filter(g => g.label !== "");
+
+                                  // Filter groups by selected name
+                                  const filteredGroups = groupFilter
+                                    ? grouped.filter(g => g.label === groupFilter)
+                                    : grouped;
+
                                   // Flatten for pagination after grouping
-                                  const allPaginated = grouped.flatMap(g => g.tasks);
+                                  const allPaginated = filteredGroups.flatMap(g => g.tasks);
                                   const totalPages = Math.ceil(allPaginated.length / TASKS_PER_PAGE);
                                   const pageStart = (taskPage - 1) * TASKS_PER_PAGE;
                                   const pageEnd = taskPage * TASKS_PER_PAGE;
                                   let seen = 0;
-                                  const pagedGroups = grouped.map(g => {
+                                  const pagedGroups = filteredGroups.map(g => {
                                     const from = seen;
                                     seen += g.tasks.length;
                                     const sliced = g.tasks.slice(
@@ -605,6 +616,19 @@ export default function Home({ loaderData }: Route.ComponentProps) {
 
                                   return (
                                     <>
+                                      {namedGroups.length > 1 && (
+                                        <Select value={groupFilter || "__all__"} onValueChange={v => { setGroupFilter(v === "__all__" ? "" : v); setTaskPage(1); }}>
+                                          <SelectTrigger className="h-7 text-xs mb-4">
+                                            <SelectValue>{groupFilter || "All groups"}</SelectValue>
+                                          </SelectTrigger>
+                                          <SelectContent>
+                                            <SelectItem value="__all__">All groups</SelectItem>
+                                            {namedGroups.map(g => (
+                                              <SelectItem key={g.label} value={g.label}>{g.label}</SelectItem>
+                                            ))}
+                                          </SelectContent>
+                                        </Select>
+                                      )}
                                       <div className="flex flex-col gap-5">
                                         {pagedGroups.map(group => (
                                           <div key={group.label}>
