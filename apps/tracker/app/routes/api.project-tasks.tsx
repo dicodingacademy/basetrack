@@ -16,9 +16,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const accessToken = await getValidAccessToken(user.id);
   const rawAssignments = await fetchAssignments(user.basecampAccountId, accessToken);
 
-  const items: BasecampAssignment[] = rawAssignments;
-
-  const tasks = items
+  const tasks = (rawAssignments as BasecampAssignment[])
     .filter((a) =>
       a.bucket?.id?.toString() === projectId &&
       a.completed !== true &&
