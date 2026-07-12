@@ -48,6 +48,7 @@ import { BasecampTaskCard } from "../components/home/EventCard";
 import { TrackableItemCard } from "../components/home/TrackableItemCard";
 import { TimerPanel } from "../components/home/TimerPanel";
 import { HistoryPanel } from "../components/home/HistoryPanel";
+import { LandingPage } from "../components/landing/LandingPage";
 
 import {
   Briefcase,
@@ -57,7 +58,6 @@ import {
   ChevronRight,
   ChevronDown,
   CheckCircle2,
-  ArrowRight,
   History,
 } from "lucide-react";
 
@@ -313,23 +313,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
   };
 
   if (!user) {
-    return (
-      <div className="flex h-screen w-screen items-center justify-center bg-background">
-        <div className="w-full max-w-sm rounded-2xl border bg-card p-8 text-center shadow-xl">
-          <div className="mx-auto mb-6 flex size-14 items-center justify-center rounded-2xl bg-primary text-primary-foreground font-bold text-xl">
-            BT
-          </div>
-          <h1 className="mb-2 text-2xl font-bold">Basetrack</h1>
-          <p className="mb-6 text-sm text-muted-foreground leading-relaxed">
-            Seamlessly track time for your Basecamp tasks.
-          </p>
-          <Button render={<a href="/auth/basecamp" />} className="w-full" size="lg">
-            Login with Basecamp
-            <ArrowRight className="ml-2 size-4" />
-          </Button>
-        </div>
-      </div>
-    );
+    return <LandingPage />;
   }
 
   const today = new Date().toLocaleDateString("en-US", {
