@@ -584,29 +584,72 @@ export default function Home({ loaderData }: Route.ComponentProps) {
                                   <EmptyState icon={CheckCircle2} title="No tasks" sub="No active tasks in this project." />
                                 ) : (() => {
                                   const tasks = selectedProjectTasks ?? [];
-                                  const totalPages = Math.ceil(tasks.length / TASKS_PER_PAGE);
-                                  const paginated = tasks.slice((taskPage - 1) * TASKS_PER_PAGE, taskPage * TASKS_PER_PAGE);
                                   const projectName = data.projects.find(p => p.id === selectedProjectId)?.name ?? "";
+
+                                  // Group by card table name (for cards) or parent.title (for todos)
+                                  const grouped: { label: string; tasks: GroupedTask[] }[] = [];
+                                  const groupMap = new Map<string, GroupedTask[]>();
+                                  for (const task of tasks) {
+                                    const parentTitle = task.parent?.title ?? "";
+                                    const key = task.type === "card"
+                                      ? (parentTitle.includes(": ") ? parentTitle.split(": ")[0] : parentTitle)
+                                      : parentTitle;
+                                    if (!groupMap.has(key)) groupMap.set(key, []);
+                                    groupMap.get(key)!.push(task);
+                                  }
+                                  // Preserve insertion order; empty key (no parent) goes last
+                                  const noParent = groupMap.get("");
+                                  groupMap.delete("");
+                                  for (const [label, ts] of groupMap) grouped.push({ label, tasks: ts });
+                                  if (noParent?.length) grouped.push({ label: "", tasks: noParent });
+
+                                  // Flatten for pagination after grouping
+                                  const allPaginated = grouped.flatMap(g => g.tasks);
+                                  const totalPages = Math.ceil(allPaginated.length / TASKS_PER_PAGE);
+                                  const pageStart = (taskPage - 1) * TASKS_PER_PAGE;
+                                  const pageEnd = taskPage * TASKS_PER_PAGE;
+                                  let seen = 0;
+                                  const pagedGroups = grouped.map(g => {
+                                    const from = seen;
+                                    seen += g.tasks.length;
+                                    const sliced = g.tasks.slice(
+                                      Math.max(0, pageStart - from),
+                                      Math.max(0, pageEnd - from),
+                                    );
+                                    return { ...g, tasks: sliced };
+                                  }).filter(g => g.tasks.length > 0);
+
                                   return (
                                     <>
-                                      <div className="flex flex-col gap-2.5">
-                                        {paginated.map((task: GroupedTask) => (
-                                          <BasecampTaskCard
-                                            key={task.id}
-                                            task={task}
-                                            projectId={selectedProjectId!}
-                                            projectName={projectName}
-                                            activeTimer={activeTimer}
-                                            onStart={startTimer}
-                                            onStop={stopTimer}
-                                            isPending={isPending}
-                                          />
+                                      <div className="flex flex-col gap-5">
+                                        {pagedGroups.map(group => (
+                                          <div key={group.label}>
+                                            {group.label && (
+                                              <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground mb-2 px-0.5">
+                                                {group.label}
+                                              </p>
+                                            )}
+                                            <div className="flex flex-col gap-2">
+                                              {group.tasks.map((task: GroupedTask) => (
+                                                <BasecampTaskCard
+                                                  key={task.id}
+                                                  task={task}
+                                                  projectId={selectedProjectId!}
+                                                  projectName={projectName}
+                                                  activeTimer={activeTimer}
+                                                  onStart={startTimer}
+                                                  onStop={stopTimer}
+                                                  isPending={isPending}
+                                                />
+                                              ))}
+                                            </div>
+                                          </div>
                                         ))}
                                       </div>
                                       {totalPages > 1 && (
                                         <div className="flex items-center justify-between mt-5 pt-4 border-t">
                                           <span className="text-xs text-muted-foreground font-mono">
-                                            {(taskPage - 1) * TASKS_PER_PAGE + 1}–{Math.min(taskPage * TASKS_PER_PAGE, tasks.length)} of {tasks.length}
+                                            {pageStart + 1}–{Math.min(pageEnd, allPaginated.length)} of {allPaginated.length}
                                           </span>
                                           <div className="flex items-center gap-1">
                                             <Button variant="outline" size="icon" className="size-7" disabled={taskPage === 1} onClick={() => setTaskPage(p => p - 1)}>
