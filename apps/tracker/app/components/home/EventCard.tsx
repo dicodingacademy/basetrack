@@ -77,7 +77,6 @@ export function BasecampTaskCard({ task, projectId, projectName, activeTimer, on
       timeLabel={dateLabel}
       typeLabel="Basecamp"
       title={task.title}
-      tags={task.parent ? [task.parent.title] : undefined}
       isPending={isPending}
       onStop={onStop}
       startSlot={
