@@ -13,6 +13,7 @@ export type BasecampParent = {
   id: number;
   title: string;
   type: string;
+  app_url?: string;
 };
 
 export type BasecampAssignment = {
