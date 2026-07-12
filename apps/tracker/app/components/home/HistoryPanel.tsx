@@ -11,6 +11,7 @@ import { ContentSkeleton, EmptyState } from "./ContentSkeleton";
 import { HourHeatmap } from "./HourHeatmap";
 import { WeekBarChart } from "./WeekBarChart";
 import { EntryRow } from "./EntryRow";
+import { MonthlyPanel } from "./MonthlyPanel";
 import type { HistoryFetcherData, TimeEntryRow } from "../../types/tracker";
 
 const SELECT_CLASS = "h-8 rounded-lg border border-border bg-card px-2.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary";
@@ -19,9 +20,10 @@ export function HistoryPanel() {
   const fetcher = useFetcher<HistoryFetcherData>();
   const retryFetcher = useFetcher<{ success: boolean; syncError?: string }>();
 
-  const [viewMode, setViewMode] = useState<"daily" | "weekly">("daily");
+  const [viewMode, setViewMode] = useState<"daily" | "weekly" | "monthly">("daily");
   const [dailyDate, setDailyDate] = useState(() => new Date().toLocaleDateString("en-CA"));
   const [weekDate, setWeekDate] = useState(() => new Date().toLocaleDateString("en-CA"));
+  const [monthDate, setMonthDate] = useState(() => new Date().toLocaleDateString("en-CA").slice(0, 7));
   const [selectedWeekDay, setSelectedWeekDay] = useState<string | null>(null);
   const [status, setStatus] = useState("all");
   const [source, setSource] = useState("all");
@@ -31,23 +33,27 @@ export function HistoryPanel() {
   // Cache last good data per mode so switching modes never shows an empty card
   const lastDailyRef = useRef<HistoryFetcherData | null>(null);
   const lastWeeklyRef = useRef<HistoryFetcherData | null>(null);
+  const lastMonthlyRef = useRef<HistoryFetcherData | null>(null);
 
   const todayStr = new Date().toLocaleDateString("en-CA");
 
-  const load = (overrides?: Partial<{ mode: string; date: string; weekDate: string; status: string; source: string }>) => {
+  const load = (overrides?: Partial<{ mode: string; date: string; weekDate: string; monthDate: string; status: string; source: string }>) => {
     const m = overrides?.mode ?? viewMode;
     const s = overrides?.status ?? status;
     const src = overrides?.source ?? source;
     if (m === "daily") {
       const d = overrides?.date ?? dailyDate;
       fetcher.load(`/api/time-entries?mode=daily&date=${d}&status=${s}&source=${src}`);
-    } else {
+    } else if (m === "weekly") {
       const d = overrides?.weekDate ?? weekDate;
       fetcher.load(`/api/time-entries?mode=weekly&date=${d}`);
+    } else {
+      const d = overrides?.monthDate ?? monthDate;
+      fetcher.load(`/api/time-entries?mode=monthly&date=${d}`);
     }
   };
 
-  useEffect(() => { load(); }, [viewMode, dailyDate, weekDate, status, source]);
+  useEffect(() => { load(); }, [viewMode, dailyDate, weekDate, monthDate, status, source]);
 
   useEffect(() => {
     if (retryFetcher.state === "idle" && retryingId !== null) {
@@ -60,6 +66,7 @@ export function HistoryPanel() {
   const fetchedData = fetcher.data;
   if (fetchedData?.mode === "daily") lastDailyRef.current = fetchedData;
   if (fetchedData?.mode === "weekly") lastWeeklyRef.current = fetchedData;
+  if (fetchedData?.mode === "monthly") lastMonthlyRef.current = fetchedData;
 
   const handleRetry = (entryId: string) => {
     setRetryingId(entryId);
@@ -105,7 +112,15 @@ export function HistoryPanel() {
     );
   }, [weekData?.weekStart]);
 
-  const isFirstLoad = isLoading && (viewMode === "daily" ? !lastDailyRef.current : !lastWeeklyRef.current);
+  const monthData = viewMode === "monthly"
+    ? (fetchedData?.mode === "monthly" ? fetchedData : lastMonthlyRef.current)
+    : null;
+
+  const isFirstLoad = isLoading && (
+    viewMode === "daily" ? !lastDailyRef.current :
+    viewMode === "weekly" ? !lastWeeklyRef.current :
+    !lastMonthlyRef.current
+  );
 
   const allEntries: TimeEntryRow[] = (viewMode === "daily" ? dailyData : weekData)?.entries ?? [];
 
@@ -123,7 +138,7 @@ export function HistoryPanel() {
           <p className="text-xs text-muted-foreground">Your logged time entries across all sources.</p>
         </div>
         <div className="flex rounded-lg border overflow-hidden text-xs">
-          {(["daily", "weekly"] as const).map(m => (
+          {(["daily", "weekly", "monthly"] as const).map(m => (
             <button
               key={m}
               onClick={() => setViewMode(m)}
@@ -233,6 +248,46 @@ export function HistoryPanel() {
           )}
         </div>
       )}
+
+      {viewMode === "monthly" && (() => {
+        const todayMonth = new Date().toLocaleDateString("en-CA").slice(0, 7);
+        const navigateMonth = (dir: -1 | 1) => {
+          const [y, mo] = monthDate.split("-").map(Number);
+          const d = new Date(y, mo - 1 + dir, 1);
+          setMonthDate(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
+        };
+        const monthLabel = new Date(monthDate + "-15").toLocaleDateString("en-US", { month: "long", year: "numeric" });
+
+        return (
+          <div>
+            <div className="flex items-center gap-2 mb-4">
+              <Button variant="outline" size="icon" className="size-8 shrink-0" onClick={() => navigateMonth(-1)}>
+                <ChevronLeft className="size-3.5" />
+              </Button>
+              <div className="flex-1 text-center">
+                <p className={cn("text-sm font-semibold transition-opacity duration-150", isLoading && "opacity-40")}>
+                  {monthLabel}
+                </p>
+              </div>
+              <Button variant="outline" size="icon" className="size-8 shrink-0" disabled={monthDate >= todayMonth} onClick={() => navigateMonth(1)}>
+                <ChevronRight className="size-3.5" />
+              </Button>
+            </div>
+
+            {isFirstLoad ? (
+              <div className="space-y-3">
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                  {[...Array(4)].map((_, i) => <Skeleton key={i} className="h-16 rounded-xl" />)}
+                </div>
+                <Skeleton className="h-32 rounded-xl" />
+                <Skeleton className="h-48 rounded-xl" />
+              </div>
+            ) : monthData ? (
+              <MonthlyPanel data={monthData} isLoading={isLoading} />
+            ) : null}
+          </div>
+        );
+      })()}
 
       {viewMode === "weekly" && (
         <div>
