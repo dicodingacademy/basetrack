@@ -26,11 +26,16 @@ export async function approveTimeEntry(
   updatedDurationSec: number,
   timezone: string
 ) {
-  const entry = await prisma.timeEntry.findFirst({
+  // Atomically claim the entry so two concurrent approvals can't both sync
+  // to Basecamp and create duplicate timesheet entries.
+  const claimed = await prisma.timeEntry.updateMany({
     where: { id: entryId, userId, syncStatus: "NEEDS_APPROVAL" },
+    data: { syncStatus: "PENDING" },
   });
 
-  if (!entry) throw new Error("Entry not found or already approved");
+  if (claimed.count === 0) throw new Error("Entry not found or already approved");
+
+  const entry = await prisma.timeEntry.findUniqueOrThrow({ where: { id: entryId } });
 
   const durationHours = updatedDurationSec / 3600;
   let newStatus: "PENDING" | "SYNCED" | "FAILED" = "FAILED";
