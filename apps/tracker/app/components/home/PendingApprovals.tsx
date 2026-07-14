@@ -16,7 +16,7 @@ function ApprovalRow({ entry }: { entry: TimeEntry }) {
   const hours = (entry.durationSec / 3600).toFixed(2);
 
   return (
-    <div className="bg-card p-4 rounded-lg border border-amber-200 dark:border-amber-500/30 flex items-center justify-between">
+    <div className="bg-card p-4 rounded-lg border flex items-center justify-between">
       <div>
         <p className="font-medium text-foreground">{entry.todoTitle}</p>
         <p className="text-sm text-muted-foreground">{entry.projectName}</p>
@@ -44,7 +44,7 @@ function ApprovalRow({ entry }: { entry: TimeEntry }) {
           />
         </div>
 
-        <Button type="submit" size="sm" disabled={isSubmitting} className="bg-amber-600 hover:bg-amber-700 text-white mt-5">
+        <Button type="submit" size="sm" disabled={isSubmitting} className="mt-5">
           {isSubmitting ? (
             <>
               <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -63,13 +63,13 @@ export function PendingApprovals({ approvals }: PendingApprovalProps) {
   if (approvals.length === 0) return null;
 
   return (
-    <Card className="shadow-sm border-amber-200 bg-amber-50/50 dark:border-amber-500/30 dark:bg-amber-500/10 mb-6">
+    <Card className="shadow-sm border-primary/25 bg-primary/5 mb-6">
       <CardHeader>
-        <CardTitle className="text-amber-700 dark:text-amber-400 flex items-center gap-2">
+        <CardTitle className="text-primary flex items-center gap-2">
           <AlertTriangle className="w-5 h-5" />
           Pending Approvals
         </CardTitle>
-        <CardDescription className="text-amber-600 dark:text-amber-500">
+        <CardDescription className="text-muted-foreground">
           The following timers were automatically stopped. Please verify the duration and approve them to sync with Basecamp.
         </CardDescription>
       </CardHeader>
