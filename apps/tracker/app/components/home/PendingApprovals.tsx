@@ -36,7 +36,8 @@ function ApprovalRow({ entry }: { entry: TimeEntry }) {
             name="durationHours"
             type="number"
             step="0.01"
-            min="0"
+            min="0.01"
+            required
             defaultValue={hours}
             disabled={isSubmitting}
             className="h-8 text-sm"

@@ -192,8 +192,8 @@ export async function action({ request }: Route.ActionArgs) {
   if (intent === "APPROVE_TIMER") {
     const entryId = formData.get("entryId") as string;
     const durationHours = parseFloat(formData.get("durationHours") as string);
-    if (!entryId || isNaN(durationHours)) return new Response("Invalid data", { status: 400 });
-    return await approveTimeEntry(user.id, entryId, user.basecampAccountId, Math.floor(durationHours * 3600));
+    if (!entryId || !Number.isFinite(durationHours) || durationHours <= 0) return new Response("Invalid data", { status: 400 });
+    return await approveTimeEntry(user.id, entryId, user.basecampAccountId, Math.round(durationHours * 3600));
   }
 
   if (intent === "SAVE_RULE") {
@@ -495,7 +495,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
           <span className="text-sm font-semibold">
             {activeTab === "basecamp" ? "Basecamp"
               : activeTab === "history" ? "History"
-              : allProviderTabs.find(t => t.tabId === activeTab)?.label ?? activeTab}
+                : allProviderTabs.find(t => t.tabId === activeTab)?.label ?? activeTab}
           </span>
           <div className="w-px h-4 bg-border" />
           <span className="font-mono text-xs text-muted-foreground">{today}</span>
