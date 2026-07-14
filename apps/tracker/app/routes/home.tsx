@@ -193,7 +193,7 @@ export async function action({ request }: Route.ActionArgs) {
     const entryId = formData.get("entryId") as string;
     const durationHours = parseFloat(formData.get("durationHours") as string);
     if (!entryId || !Number.isFinite(durationHours) || durationHours <= 0) return new Response("Invalid data", { status: 400 });
-    return await approveTimeEntry(user.id, entryId, user.basecampAccountId, Math.round(durationHours * 3600));
+    return await approveTimeEntry(user.id, entryId, user.basecampAccountId, Math.round(durationHours * 3600), user.timezone);
   }
 
   if (intent === "SAVE_RULE") {

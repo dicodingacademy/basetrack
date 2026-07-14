@@ -23,7 +23,8 @@ export async function approveTimeEntry(
   userId: string,
   entryId: string,
   basecampId: string,
-  updatedDurationSec: number
+  updatedDurationSec: number,
+  timezone: string
 ) {
   const entry = await prisma.timeEntry.findFirst({
     where: { id: entryId, userId, syncStatus: "NEEDS_APPROVAL" },
@@ -37,12 +38,17 @@ export async function approveTimeEntry(
 
   try {
     const accessToken = await getValidAccessToken(userId);
-    const stoppedAt = entry.stoppedAt;
-    const yyyy = stoppedAt.getFullYear();
-    const mm = String(stoppedAt.getMonth() + 1).padStart(2, "0");
-    const dd = String(stoppedAt.getDate()).padStart(2, "0");
+    // en-CA locale formats as YYYY-MM-DD; the date must be in the user's
+    // timezone, not the server's, or entries stopped near midnight land on
+    // the wrong day in Basecamp.
+    let date: string;
+    try {
+      date = entry.stoppedAt.toLocaleDateString("en-CA", { timeZone: timezone });
+    } catch {
+      date = entry.stoppedAt.toLocaleDateString("en-CA");
+    }
     const payload = {
-      date: `${yyyy}-${mm}-${dd}`,
+      date,
       hours: Number(durationHours.toFixed(2)),
       description: entry.source === "BASECAMP" ? "Tracked via BaseTrack" : entry.todoTitle,
     };
