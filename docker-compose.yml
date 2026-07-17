@@ -19,7 +19,9 @@ services:
       retries: 5
 
   tracker:
-    image: basetrack-tracker:latest
+    build:
+      context: .
+      dockerfile: apps/tracker/Dockerfile
     ports:
       - "${TRACKER_PORT:-3000}:3000"
     environment:
@@ -50,7 +52,9 @@ services:
     restart: unless-stopped
 
   cron:
-    image: basetrack-cron:latest
+    build:
+      context: .
+      dockerfile: apps/cron/Dockerfile
     environment:
       NODE_ENV: production
       DATABASE_URL: postgresql://${DB_USER:-basetrack}:${DB_PASSWORD:-password}@db:5432/${DB_NAME:-basetrack}?schema=public
@@ -66,7 +70,9 @@ services:
     restart: unless-stopped
 
   ws:
-    image: basetrack-ws:latest
+    build:
+      context: .
+      dockerfile: apps/ws/Dockerfile
     ports:
       - "${WS_PORT:-8081}:8081"
     environment:
