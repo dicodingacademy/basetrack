@@ -124,15 +124,17 @@ async function loadData(
 }
 
 export async function loader({ request }: Route.LoaderArgs) {
+  const url = new URL(request.url);
+  const showLanding = url.searchParams.has("landing");
   const cookie = request.headers.get("Cookie");
   const session = await getSession(cookie);
   const sessionId = session.get("sessionId");
 
-  if (!sessionId) return { user: null, activeTimer: null, googleConnected: false, data: null };
+  if (!sessionId) return { user: null, activeTimer: null, showLanding: false, googleConnected: false, data: null };
 
   let user = await getUserFromSessionId(sessionId);
 
-  if (!user) return { user: null, activeTimer: null, googleConnected: false, data: null };
+  if (!user) return { user: null, activeTimer: null, showLanding: false, googleConnected: false, data: null };
 
   if (!user.apiKey) {
     await prisma.user.update({ where: { id: user.id }, data: { apiKey: randomUUID() } });
@@ -167,6 +169,7 @@ export async function loader({ request }: Route.LoaderArgs) {
       timezone: user!.timezone,
       apiKey: user!.apiKey,
     },
+    showLanding,
     connectedProviders: connectedProviderIds,
     providerGroups,
     availableProviders,
@@ -250,7 +253,7 @@ export async function action({ request }: Route.ActionArgs) {
 }
 
 export default function Home({ loaderData }: Route.ComponentProps) {
-  const { user, activeTimer: serverActiveTimer, wsUrl, connectedProviders, providerGroups, availableProviders, rules } = loaderData;
+  const { user, activeTimer: serverActiveTimer, showLanding, wsUrl, connectedProviders, providerGroups, availableProviders, rules } = loaderData;
 
   const allProviderTabs = (providerGroups ?? []).flatMap(g => g.tabs);
 
@@ -315,8 +318,8 @@ export default function Home({ loaderData }: Route.ComponentProps) {
       .catch(() => setTabItems(prev => ({ ...prev, [tabId]: { status: "error" } })));
   };
 
-  if (!user) {
-    return <LandingPage />;
+  if (!user || showLanding) {
+    return <LandingPage activeTimer={serverActiveTimer} isLoggedIn={!!user} />;
   }
 
   const today = new Date().toLocaleDateString("en-US", {
