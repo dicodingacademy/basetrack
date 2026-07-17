@@ -1,0 +1,45 @@
+/* Hallmark · tokens.css · Basetrack · 2026-07-17
+ * Maps Hallmark token names to the project's existing shadcn/Tailwind custom properties.
+ * The page CSS uses Tailwind utility classes that reference the tokens below — no conflicts.
+ */
+:root {
+  /* Colour */
+  --color-paper:      var(--background);
+  --color-paper-2:    var(--muted);
+  --color-ink:        var(--foreground);
+  --color-ink-2:      var(--muted-foreground);
+  --color-rule:       var(--border);
+  --color-accent:     var(--primary);           /* oklch(0.68 0.19 42) light · #f4813f dark */
+  --color-accent-ink: var(--primary-foreground);
+  --color-focus:      var(--ring);
+
+  /* Typography */
+  --font-display: "DM Sans", ui-sans-serif, sans-serif;
+  --font-body:    "DM Sans", ui-sans-serif, sans-serif;
+  --font-outlier: "JetBrains Mono", ui-monospace, monospace;
+
+  /* Spacing (4-pt scale) */
+  --space-3xs: 0.25rem;
+  --space-2xs: 0.5rem;
+  --space-xs:  0.75rem;
+  --space-sm:  1rem;
+  --space-md:  1.5rem;
+  --space-lg:  2rem;
+  --space-xl:  3rem;
+  --space-2xl: 4.5rem;
+  --space-3xl: 7rem;
+
+  /* Easing */
+  --ease-out:    cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in:     cubic-bezier(0.4, 0, 1, 1);
+  --ease-in-out: cubic-bezier(0.45, 0, 0.55, 1);
+
+  /* Durations */
+  --dur-short: 220ms;
+  --dur-base:  320ms;
+
+  /* Radius */
+  --radius-card:  var(--radius);
+  --radius-pill:  9999px;
+  --radius-input: var(--radius-md);
+}

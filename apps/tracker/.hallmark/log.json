@@ -1,0 +1,29 @@
+[
+  {
+    "date": "2026-07-17",
+    "macrostructure": "Marquee Hero",
+    "theme": "warm-orange (project palette preserved)",
+    "enrichment": "none",
+    "nav": "N1b SaaS three-section",
+    "footer": "Ft2 inline single-line",
+    "brief": "Basetrack · playful redesign · giant live timer as hero marquee element"
+  },
+  {
+    "date": "2026-07-17",
+    "macrostructure": "Bento Grid",
+    "theme": "warm-orange (project palette preserved) / Hum-spirit",
+    "enrichment": "none",
+    "nav": "N1b SaaS three-section",
+    "footer": "Ft8 marquee scroll",
+    "brief": "Basetrack · playful redesign · Bento Grid · superseded (user: too aneh)"
+  },
+  {
+    "date": "2026-07-17",
+    "macrostructure": "Workbench",
+    "theme": "warm-orange (project palette preserved)",
+    "enrichment": "none",
+    "nav": "N9 edge-aligned",
+    "footer": "Ft2 inline",
+    "brief": "Basetrack · technical / modern-minimal · first redesign (superseded)"
+  }
+]
