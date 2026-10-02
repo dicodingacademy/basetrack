@@ -8,6 +8,7 @@ import {
 export type StartTimerInput = {
   todoId: string;
   todoTitle: string;
+  description?: string | null;
   projectId: string;
   projectName: string;
   source?: string;
@@ -49,6 +50,7 @@ export function createTimerService(prisma: PrismaClient, broadcastToUser: Broadc
         userId: timer.userId,
         todoId: timer.todoId,
         todoTitle: timer.todoTitle,
+        description: timer.description,
         projectId: timer.projectId,
         projectName: timer.projectName,
         startedAt: timer.startedAt,
@@ -72,7 +74,7 @@ export function createTimerService(prisma: PrismaClient, broadcastToUser: Broadc
         const payload = {
           date: formatDateInTimezone(stoppedAt, user.timezone),
           hours: Number((durationSec / 3600).toFixed(2)),
-          description: timer.source === "BASECAMP" ? "Tracked via BaseTrack" : timer.todoTitle,
+          description: timer.description || (timer.source === "BASECAMP" ? "Tracked via BaseTrack" : timer.todoTitle),
         };
 
         let recordingId: string;
@@ -127,6 +129,7 @@ export function createTimerService(prisma: PrismaClient, broadcastToUser: Broadc
         userId,
         todoId: input.todoId,
         todoTitle: input.todoTitle,
+        description: input.description || null,
         projectId: input.projectId,
         projectName: input.projectName,
         source: input.source || "BASECAMP",

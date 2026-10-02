@@ -55,7 +55,7 @@ export async function approveTimeEntry(
     const payload = {
       date,
       hours: Number(durationHours.toFixed(2)),
-      description: entry.source === "BASECAMP" ? "Tracked via BaseTrack" : entry.todoTitle,
+      description: entry.description || (entry.source === "BASECAMP" ? "Tracked via BaseTrack" : entry.todoTitle),
     };
 
     let recordingId: string;

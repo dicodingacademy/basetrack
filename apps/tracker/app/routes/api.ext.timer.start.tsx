@@ -21,8 +21,9 @@ export async function action({ request }: ActionFunctionArgs) {
     return extError(400, "invalid_request", "Body must be JSON");
   }
 
-  const { source, externalId, title, projectId, projectName } = body;
+  const { source, externalId, title, description, projectId, projectName } = body;
   if (
+    (description !== undefined && description !== null && (typeof description !== "string" || description.length > 2000)) ||
     typeof source !== "string" || !EXTENSION_SOURCES.has(source) ||
     !isText(externalId) || !isText(title) || !isText(projectName) ||
     typeof projectId !== "string" || !/^\d+$/.test(projectId)
@@ -54,6 +55,7 @@ export async function action({ request }: ActionFunctionArgs) {
       userId: user.id,
       todoId: externalId.trim(),
       todoTitle: title.trim(),
+      description: typeof description === "string" ? description.trim() || null : null,
       projectId,
       projectName: projectName.trim(),
       source,

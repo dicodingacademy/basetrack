@@ -129,6 +129,7 @@ cron.schedule("* * * * *", async () => {
               userId: timer.userId,
               todoId: timer.todoId,
               todoTitle: timer.todoTitle,
+              description: timer.description,
               projectId: timer.projectId,
               projectName: timer.projectName,
               startedAt: timer.startedAt,

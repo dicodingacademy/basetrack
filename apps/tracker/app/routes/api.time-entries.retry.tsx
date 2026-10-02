@@ -44,7 +44,7 @@ export async function action({ request }: ActionFunctionArgs) {
     const payload = {
       date,
       hours: Number((entry.durationSec / 3600).toFixed(2)),
-      description: entry.source === "BASECAMP" ? "Tracked via BaseTrack" : entry.todoTitle,
+      description: entry.description || (entry.source === "BASECAMP" ? "Tracked via BaseTrack" : entry.todoTitle),
     };
 
     let recordingId: string;

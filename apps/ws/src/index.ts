@@ -77,7 +77,7 @@ wss.on("connection", (ws) => {
         const userId = activeClients.get(ws);
         if (!userId) return;
 
-        const { todoId, todoTitle, projectId, projectName, source } = message;
+        const { todoId, todoTitle, description, projectId, projectName, source } = message;
 
         if (!todoId || !todoTitle || !projectId || !projectName) {
           ws.send(JSON.stringify({ type: "TIMER_ERROR", code: "INVALID_DATA", message: "Missing required fields" }));
@@ -85,7 +85,7 @@ wss.on("connection", (ws) => {
         }
 
         try {
-          await timers.startTimer(userId, { todoId, todoTitle, projectId, projectName, source });
+          await timers.startTimer(userId, { todoId, todoTitle, description, projectId, projectName, source });
         } catch (err) {
           console.error("Failed to start timer:", err);
           ws.send(JSON.stringify({ type: "TIMER_ERROR", code: "START_FAILED", message: "Failed to start timer" }));
@@ -172,14 +172,14 @@ app.post("/internal/timer/start", async (req, res) => {
     return;
   }
 
-  const { userId, todoId, todoTitle, projectId, projectName, source } = req.body;
+  const { userId, todoId, todoTitle, description, projectId, projectName, source } = req.body;
   if (!userId || !todoId || !todoTitle || !projectId || !projectName) {
     res.status(400).json({ error: "Missing required fields" });
     return;
   }
 
   try {
-    const result = await timers.startTimer(userId, { todoId, todoTitle, projectId, projectName, source });
+    const result = await timers.startTimer(userId, { todoId, todoTitle, description, projectId, projectName, source });
     res.json(result);
   } catch (err) {
     console.error("Failed to start timer via internal API:", err);
