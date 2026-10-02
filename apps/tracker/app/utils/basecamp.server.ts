@@ -144,6 +144,31 @@ export async function fetchAssignments(accountId: string, accessToken: string) {
   return all;
 }
 
+/** All active projects the user can access (not only those with assignments). */
+export async function fetchProjects(accountId: string, accessToken: string) {
+  const all: { id: string; name: string }[] = [];
+  let url: string | null = `https://3.basecampapi.com/${accountId}/projects.json`;
+
+  while (url) {
+    const res: Response = await fetch(url, {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "User-Agent": "BaseTrack (app@basetrack.local)",
+      },
+    });
+
+    if (!res.ok) throw new Error(`Failed to fetch projects: ${await res.text()}`);
+
+    const page = await res.json() as { id: number; name: string }[];
+    all.push(...page.map(p => ({ id: p.id.toString(), name: p.name })));
+
+    const linkHeader: string | null = res.headers.get("Link");
+    url = linkHeader?.match(/<([^>]+)>;\s*rel="next"/)?.[1] ?? null;
+  }
+
+  return all.sort((a, b) => a.name.localeCompare(b.name));
+}
+
 export async function fetchProjectDetails(accountId: string, bucketIds: string[], accessToken: string) {
   const promises = bucketIds.map(async (id) => {
     const response = await fetch(`https://3.basecampapi.com/${accountId}/projects/${id}.json`, {

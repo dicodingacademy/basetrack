@@ -166,6 +166,47 @@ app.post("/internal/kick", (req, res) => {
   res.json({ success: true, kickedCount });
 });
 
+app.post("/internal/timer/start", async (req, res) => {
+  if (!isAuthorized(req.headers["x-internal-key"])) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+
+  const { userId, todoId, todoTitle, projectId, projectName, source } = req.body;
+  if (!userId || !todoId || !todoTitle || !projectId || !projectName) {
+    res.status(400).json({ error: "Missing required fields" });
+    return;
+  }
+
+  try {
+    const result = await timers.startTimer(userId, { todoId, todoTitle, projectId, projectName, source });
+    res.json(result);
+  } catch (err) {
+    console.error("Failed to start timer via internal API:", err);
+    res.status(500).json({ error: "Failed to start timer" });
+  }
+});
+
+app.post("/internal/timer/stop", async (req, res) => {
+  if (!isAuthorized(req.headers["x-internal-key"])) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+
+  const { userId } = req.body;
+  if (!userId) {
+    res.status(400).json({ error: "Missing userId" });
+    return;
+  }
+
+  try {
+    res.json(await timers.stopTimer(userId));
+  } catch (err) {
+    console.error("Failed to stop timer via internal API:", err);
+    res.status(500).json({ error: "Failed to stop timer" });
+  }
+});
+
 const PORT = process.env.PORT || 8081;
 server.listen(Number(PORT), () => {
   console.log(`WebSocket server running on port ${PORT} [${new Date().toISOString()}]`);
