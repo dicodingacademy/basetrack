@@ -94,6 +94,8 @@ model ActiveTimer {
   user        User     @relation(fields: [userId], references: [id])
   todoId      String
   todoTitle   String
+  /// Basecamp timesheet description composed by the client (e.g. the extension); falls back to todoTitle.
+  description String?
   projectId   String
   projectName String
   startedAt   DateTime @default(now())
@@ -120,6 +122,7 @@ model TimeEntry {
   user            User       @relation(fields: [userId], references: [id])
   todoId          String
   todoTitle       String
+  description     String?
   projectId       String
   projectName     String
   startedAt       DateTime
