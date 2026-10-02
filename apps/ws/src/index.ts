@@ -4,11 +4,7 @@ import express from "express";
 import { PrismaClient } from "@prisma/client";
 import { createServer } from "node:http";
 import { timingSafeEqual } from "node:crypto";
-import {
-  getValidAccessToken,
-  createTimesheetEntry,
-  getProjectTimesheetRecordingId,
-} from "./basecamp.js";
+import { createTimerService } from "./timer.js";
 
 const prisma = new PrismaClient();
 const app = express();
@@ -38,6 +34,8 @@ function broadcastToUser(userId: string, event: object) {
     }
   }
 }
+
+const timers = createTimerService(prisma, broadcastToUser);
 
 wss.on("connection", (ws) => {
   let isAuthenticated = false;
@@ -87,19 +85,7 @@ wss.on("connection", (ws) => {
         }
 
         try {
-          await prisma.activeTimer.deleteMany({ where: { userId } });
-          const newTimer = await prisma.activeTimer.create({
-            data: {
-              userId,
-              todoId,
-              todoTitle,
-              projectId,
-              projectName,
-              source: source || "BASECAMP",
-            },
-          });
-          broadcastToUser(userId, { type: "TIMER_STARTED", timer: newTimer });
-          console.log(`Timer started for user ${userId}: ${todoTitle}`);
+          await timers.startTimer(userId, { todoId, todoTitle, projectId, projectName, source });
         } catch (err) {
           console.error("Failed to start timer:", err);
           ws.send(JSON.stringify({ type: "TIMER_ERROR", code: "START_FAILED", message: "Failed to start timer" }));
@@ -110,90 +96,7 @@ wss.on("connection", (ws) => {
         const userId = activeClients.get(ws);
         if (!userId) return;
 
-        const user = await prisma.user.findUnique({ where: { id: userId } });
-        if (!user) return;
-
-        const activeTimer = await prisma.activeTimer.findUnique({ where: { userId } });
-
-        if (!activeTimer) {
-          ws.send(JSON.stringify({ type: "TIMER_STOPPED" }));
-          return;
-        }
-
-        const stoppedAt = new Date();
-        const durationSec = Math.floor((stoppedAt.getTime() - activeTimer.startedAt.getTime()) / 1000);
-        const durationHours = durationSec / 3600;
-
-        await prisma.activeTimer.delete({ where: { userId } });
-
-        // Broadcast immediately — UI doesn't wait for Basecamp sync
-        broadcastToUser(userId, { type: "TIMER_STOPPED" });
-        console.log(`Timer stopped for user ${userId}, duration: ${durationSec}s`);
-
-        let syncStatus: "SYNCED" | "FAILED" | "NEEDS_APPROVAL" = "FAILED";
-        let syncError: string | null = null;
-
-        if (durationSec < 60) {
-          syncError = "Duration too short (minimum 60 s for Basecamp)";
-        } else {
-          try {
-            const accessToken = await getValidAccessToken(userId, prisma);
-            const yyyy = stoppedAt.getFullYear();
-            const mm = String(stoppedAt.getMonth() + 1).padStart(2, "0");
-            const dd = String(stoppedAt.getDate()).padStart(2, "0");
-            const payload = {
-              date: `${yyyy}-${mm}-${dd}`,
-              hours: Number(durationHours.toFixed(2)),
-              description: activeTimer.source === "BASECAMP" ? "Tracked via BaseTrack" : activeTimer.todoTitle,
-            };
-
-            let recordingId: string;
-
-            if (activeTimer.source === "BASECAMP") {
-              recordingId = activeTimer.todoId;
-            } else {
-              const found = await getProjectTimesheetRecordingId(
-                user.basecampAccountId,
-                activeTimer.projectId,
-                accessToken
-              );
-              if (!found) {
-                console.warn(
-                  `[SYNC] Project ${activeTimer.projectId} has no project-level timesheet entries. ` +
-                  `Log at least one project-level time entry manually in Basecamp to enable auto-sync.`
-                );
-                syncError = "Project has no timesheet recording in Basecamp. Log a project-level time entry manually first.";
-                throw new Error("bootstrap");
-              }
-              recordingId = found;
-            }
-
-            await createTimesheetEntry(user.basecampAccountId, recordingId, accessToken, payload);
-            syncStatus = "SYNCED";
-          } catch (err: any) {
-            if (err?.message !== "bootstrap") {
-              console.error("Failed to sync timesheet entry:", err);
-              syncError = (err as Error).message || "Basecamp sync failed";
-            }
-          }
-        }
-
-        await prisma.timeEntry.create({
-          data: {
-            userId,
-            todoId: activeTimer.todoId,
-            todoTitle: activeTimer.todoTitle,
-            projectId: activeTimer.projectId,
-            projectName: activeTimer.projectName,
-            startedAt: activeTimer.startedAt,
-            stoppedAt,
-            durationSec,
-            stopReason: "MANUAL",
-            syncStatus,
-            syncError,
-            source: activeTimer.source,
-          },
-        });
+        await timers.stopTimer(userId);
       }
     } catch (e) {
       console.error("WebSocket message error:", e);
