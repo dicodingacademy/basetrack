@@ -13,6 +13,9 @@ export type ProjectItem = {
   projectName: string;
   externalId: string; // owner/repo#123 or draft:<itemId>
   title: string;
+  issueTitle: string;
+  /** The issue itself, or the item inside the project for draft issues. */
+  url: string;
 };
 
 /** Returns the item open in the project side pane, or null. */
@@ -30,9 +33,15 @@ export function currentProjectItem(): ProjectItem | null {
   const itemId = params.get("itemId");
 
   let ref: string | null = null;
-  if (issue && issue.length === 3 && issue.every(Boolean)) ref = `${issue[0]}/${issue[1]}#${issue[2]}`;
-  else if (itemId) ref = `draft:${itemId}`;
-  if (!ref) return null;
+  let url: string | null = null;
+  if (issue && issue.length === 3 && issue.every(Boolean)) {
+    ref = `${issue[0]}/${issue[1]}#${issue[2]}`;
+    url = `https://github.com/${issue[0]}/${issue[1]}/issues/${issue[2]}`;
+  } else if (itemId) {
+    ref = `draft:${itemId}`;
+    url = `https://github.com/orgs/${org}/projects/${projectNumber}?pane=issue&itemId=${itemId}`;
+  }
+  if (!ref || !url) return null;
 
   let titleEl: Element | null = null;
   for (const sel of GITHUB.paneTitle) {
@@ -49,6 +58,8 @@ export function currentProjectItem(): ProjectItem | null {
     projectName: projectNameFromTitle(org, projectNumber),
     externalId: ref,
     title: ref.startsWith("draft:") ? issueTitle : `${ref} ${issueTitle}`,
+    issueTitle,
+    url,
   };
 }
 

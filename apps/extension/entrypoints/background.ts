@@ -140,6 +140,7 @@ export default defineBackground(() => {
       source: item.source,
       externalId: item.externalId.slice(0, 255),
       title: item.title.slice(0, 255),
+      description: item.description?.slice(0, 2000),
       projectId: project.id,
       projectName: project.name,
     });

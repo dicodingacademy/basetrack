@@ -41,6 +41,8 @@ export type ItemInfo = {
   source: Source;
   externalId: string;
   title: string;
+  /** Basecamp timesheet description; the server falls back to `title`. */
+  description?: string;
   context: { key: string; label: string };
 };
 

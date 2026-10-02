@@ -10,6 +10,8 @@ export const GCAL = {
   dialogs: ['#xDetDlg', '[role="dialog"][data-eventid]', '[role="dialog"]'],
   /** Close button of the detail popover; aria-labels are localized, the id isn't. */
   closeButton: ['#xDetDlgCloseBu', 'button[aria-label="Close"]', 'button[aria-label="Tutup"]'],
+  /** Google Meet join link inside the popover. */
+  meetLink: 'a[href*="meet.google.com/"]',
   /** Element carrying the encoded event id, searched inside a dialog. */
   eventId: "[data-eventid]",
   /** Event title inside the popover. `#rAECCd` is the title span id. */
@@ -24,7 +26,14 @@ export const GCAL = {
   ],
 };
 
-export type CalendarEvent = { eventId: string; calendarId: string; title: string };
+export type CalendarEvent = {
+  eventId: string;
+  calendarId: string;
+  title: string;
+  /** Date/time line as shown in the popover, e.g. "Wednesday, September 30 · 8:30 – 9:30am". */
+  when?: string | null;
+  meetUrl?: string | null;
+};
 
 /**
  * `data-eventid` / the eventedit path segment is base64 (often url-safe, often
@@ -72,6 +81,23 @@ function findToolbarGroup(dialog: HTMLElement): HTMLElement | null {
   return null;
 }
 
+/** The line right after the title row holds the date and time (verified 2026-10; class names are obfuscated). */
+function findWhen(heading: HTMLElement | null): string | null {
+  const text = textOf(heading?.parentElement?.nextElementSibling).replace(/\s*⋅\s*/g, " · ");
+  return /\d/.test(text) ? text : null;
+}
+
+function findMeetUrl(dialog: HTMLElement): string | null {
+  const link = dialog.querySelector<HTMLAnchorElement>(GCAL.meetLink);
+  if (!link) return null;
+  try {
+    const url = new URL(link.href);
+    return url.pathname.length > 1 ? `https://meet.google.com${url.pathname}` : null; // drop ?authuser=… etc.
+  } catch {
+    return null;
+  }
+}
+
 export type EventDialog = { dialog: HTMLElement; toolbar: HTMLElement | null; anchor: HTMLElement | null; event: CalendarEvent };
 
 /** Event detail dialogs currently on screen, with their decoded event. */
@@ -100,7 +126,13 @@ export function findEventDialogs(): EventDialog[] {
         dialog,
         toolbar: findToolbarGroup(dialog),
         anchor: heading,
-        event: { eventId, calendarId, title: textOf(heading) || "Untitled event" },
+        event: {
+          eventId,
+          calendarId,
+          title: textOf(heading) || "Untitled event",
+          when: findWhen(heading),
+          meetUrl: findMeetUrl(dialog),
+        },
       });
     }
   }

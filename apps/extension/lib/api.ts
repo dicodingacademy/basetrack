@@ -57,6 +57,7 @@ export const startTimer = (body: {
   source: Source;
   externalId: string;
   title: string;
+  description?: string;
   projectId: string;
   projectName: string;
 }) =>

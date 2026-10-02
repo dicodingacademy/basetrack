@@ -2,6 +2,7 @@ import { defineContentScript } from "wxt/utils/define-content-script";
 import { createWidget, type Widget } from "../content/widget";
 import { watchPage } from "../content/watch";
 import { currentProjectItem } from "../content/sites/github";
+import { describeGithubItem } from "../lib/description";
 
 export default defineContentScript({
   // All of github.com: navigating into a project is client-side, so the
@@ -28,6 +29,7 @@ export default defineContentScript({
         source: "GITHUB_PROJECT",
         externalId: item.externalId,
         title: item.title,
+        description: describeGithubItem({ title: item.issueTitle, url: item.url }),
         context: { key: `gh:${item.org}/${item.projectNumber}`, label: item.projectName },
       });
     }

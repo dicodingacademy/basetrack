@@ -3,11 +3,13 @@ import { createWidget, type Widget } from "../content/widget";
 import { watchPage } from "../content/watch";
 import { findEditPageEvent, findEventDialogs, type CalendarEvent, type EventDialog } from "../content/sites/gcal";
 import type { ItemInfo } from "../lib/types";
+import { describeCalendarEvent } from "../lib/description";
 
 const toItem = (event: CalendarEvent): ItemInfo => ({
   source: "GOOGLE_CALENDAR",
   externalId: event.eventId,
   title: event.title,
+  description: describeCalendarEvent(event),
   context: { key: `gcal:${event.calendarId}`, label: event.calendarId === "unknown" ? "this calendar" : event.calendarId },
 });
 

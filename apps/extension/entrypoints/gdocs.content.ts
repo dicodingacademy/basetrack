@@ -1,6 +1,7 @@
 import { defineContentScript } from "wxt/utils/define-content-script";
 import { createWidget, type Widget } from "../content/widget";
 import { watchPage } from "../content/watch";
+import { describeGoogleDoc } from "../lib/description";
 import { currentDoc, findShareAnchor } from "../content/sites/gdocs";
 
 export default defineContentScript({
@@ -42,6 +43,7 @@ export default defineContentScript({
         source: "GOOGLE_DOCS",
         externalId: doc.docId,
         title: doc.title,
+        description: describeGoogleDoc(doc),
         context: { key: `gdocs:${doc.docId}`, label: "this document" },
       });
     }
