@@ -4,6 +4,7 @@ import type { Route } from "./+types/auth.callback";
 import { exchangeCodeForTokens, getLaunchpadAuthorization } from "../utils/basecamp.server";
 import { prisma } from "../utils/db.server";
 import { commitSession, getSession } from "../utils/session.server";
+import { safeReturnTo } from "../utils/redirect.server";
 
 export async function loader({ request }: Route.LoaderArgs) {
   const url = new URL(request.url);
@@ -22,6 +23,8 @@ export async function loader({ request }: Route.LoaderArgs) {
   }
 
   cookieSession.unset("oauth_state");
+  const returnTo = safeReturnTo(cookieSession.get("returnTo")) ?? "/";
+  cookieSession.unset("returnTo");
 
   try {
     const tokenData = await exchangeCodeForTokens(code);
@@ -76,7 +79,7 @@ export async function loader({ request }: Route.LoaderArgs) {
 
     cookieSession.set("sessionId", dbSession.id);
 
-    return redirect("/", {
+    return redirect(returnTo, {
       headers: {
         "Set-Cookie": await commitSession(cookieSession, { expires: expiresAt }),
       },
