@@ -7,6 +7,8 @@ export default [
   route("api/project-tasks", "routes/api.project-tasks.tsx"),
   route("api/time-entries", "routes/api.time-entries.tsx"),
   route("api/time-entries/retry", "routes/api.time-entries.retry.tsx"),
+  route("api/extension/token", "routes/api.extension.token.tsx"),
+  route("extension/authorize", "routes/extension.authorize.tsx"),
   route("auth/basecamp", "routes/auth.basecamp.tsx"),
   route("auth/callback", "routes/auth.callback.tsx"),
   route("auth/logout", "routes/auth.logout.tsx"),
