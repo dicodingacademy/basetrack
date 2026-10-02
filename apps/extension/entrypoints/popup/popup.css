@@ -1,0 +1,18 @@
+.popup { width: 320px; padding: 14px; }
+.logo {
+  display: inline-grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
+  background: var(--primary);
+  color: var(--primary-fg);
+  font-weight: 700;
+  font-size: 11px;
+}
+.title { font-weight: 600; font-size: 14px; word-break: break-word; }
+.clock { font-size: 22px; font-weight: 600; }
+.truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 180px; }
+.live { animation: pulse 1.6s ease-in-out infinite; }
+@keyframes pulse { 50% { opacity: 0.35; } }
+@media (prefers-reduced-motion: reduce) { .live { animation: none; } }

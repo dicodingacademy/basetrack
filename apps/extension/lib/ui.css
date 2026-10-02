@@ -1,0 +1,73 @@
+:root {
+  --bg: #faf7f4;
+  --card: #ffffff;
+  --fg: #1f1d1a;
+  --muted: #6b6560;
+  --border: #e4ddd5;
+  --primary: #f4813f;
+  --primary-fg: #ffffff;
+  --danger: #dc4a3d;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #1b1e23;
+    --card: #23272e;
+    --fg: #ece8e3;
+    --muted: #a39d96;
+    --border: #3a3f47;
+    color-scheme: dark;
+  }
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font: 14px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+h1, h2, h3 { margin: 0; line-height: 1.25; }
+h1 { font-size: 18px; }
+h2 { font-size: 15px; }
+p { margin: 0; }
+.muted { color: var(--muted); }
+.small { font-size: 12px; }
+.mono { font-family: ui-monospace, "JetBrains Mono", Menlo, monospace; font-variant-numeric: tabular-nums; }
+.error { color: var(--danger); font-size: 12.5px; }
+.card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 14px;
+}
+.stack { display: flex; flex-direction: column; gap: 10px; }
+.row { display: flex; align-items: center; gap: 8px; }
+.spacer { flex: 1; }
+.btn {
+  appearance: none;
+  border: 1px solid var(--border);
+  background: var(--card);
+  color: var(--fg);
+  border-radius: 8px;
+  padding: 7px 12px;
+  font: inherit;
+  font-weight: 500;
+  cursor: pointer;
+}
+.btn:hover { border-color: var(--muted); }
+.btn:disabled { opacity: 0.6; cursor: progress; }
+.btn.primary { background: var(--primary); border-color: var(--primary); color: var(--primary-fg); }
+.btn.danger { color: var(--danger); border-color: var(--danger); }
+.btn.link { border: none; background: none; padding: 0; color: var(--muted); font-weight: 400; }
+.btn.link:hover { color: var(--fg); text-decoration: underline; }
+select {
+  font: inherit;
+  color: var(--fg);
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 6px 8px;
+  max-width: 100%;
+}
+code { font-family: ui-monospace, Menlo, monospace; font-size: 12px; word-break: break-all; }
+.dot { width: 8px; height: 8px; border-radius: 50%; background: var(--primary); display: inline-block; }
