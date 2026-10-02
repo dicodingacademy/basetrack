@@ -2,8 +2,9 @@ import { useEffect } from "react";
 import { useFetcher } from "react-router";
 import { cn } from "../../lib/utils";
 import { Button } from "../ui/button";
-import { Clock, Square, Briefcase, Calendar, ListTodo, History } from "lucide-react";
+import { Clock, Square, Briefcase, History } from "lucide-react";
 import { fmtTime, fmtDurationShort } from "../../lib/format";
+import { SOURCES } from "../../lib/sources";
 import type { ActiveTimer, HistoryFetcherData, TimeEntryRow } from "../../types/tracker";
 
 const STATUS_BORDER: Record<string, string> = {
@@ -13,11 +14,7 @@ const STATUS_BORDER: Record<string, string> = {
   PENDING: "border-l-muted-foreground/30",
 };
 
-const SOURCE_ICON: Record<string, React.ElementType> = {
-  BASECAMP: Briefcase,
-  GOOGLE_CALENDAR: Calendar,
-  GOOGLE_TASKS: ListTodo,
-};
+const SOURCE_ICON: Record<string, React.ElementType> = Object.fromEntries(SOURCES.map(s => [s.key, s.icon]));
 
 function TodayEntry({ e }: { e: TimeEntryRow }) {
   const Icon = SOURCE_ICON[e.source] ?? Briefcase;

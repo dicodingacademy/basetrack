@@ -29,4 +29,4 @@ export type GoogleTask = {
   taskListName: string;
 };
 
-export type TimerSource = "BASECAMP" | "GOOGLE_CALENDAR" | "GOOGLE_TASKS";
+export type { TimerSource } from "../lib/sources";

@@ -2,6 +2,7 @@ import type { LoaderFunctionArgs } from "react-router";
 import { data } from "react-router";
 import { getSession, getUserFromSessionId } from "../utils/session.server";
 import { prisma } from "../utils/db.server";
+import { sourceFromParam } from "../lib/sources";
 
 const PAGE_SIZE = 20;
 
@@ -56,9 +57,6 @@ export async function loader({ request }: LoaderFunctionArgs) {
     const statusMap: Record<string, "SYNCED" | "FAILED" | "NEEDS_APPROVAL" | "PENDING"> = {
       synced: "SYNCED", failed: "FAILED", needs_approval: "NEEDS_APPROVAL", pending: "PENDING",
     };
-    const srcMap: Record<string, "BASECAMP" | "GOOGLE_CALENDAR" | "GOOGLE_TASKS"> = {
-      basecamp: "BASECAMP", calendar: "GOOGLE_CALENDAR", tasks: "GOOGLE_TASKS",
-    };
 
     const [entries, timeline] = await Promise.all([
       prisma.timeEntry.findMany({
@@ -66,7 +64,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
           userId: user.id,
           startedAt: { gte: dayStart, lte: dayEnd },
           ...(statusParam !== "all" && statusMap[statusParam] && { syncStatus: statusMap[statusParam] }),
-          ...(sourceParam !== "all" && srcMap[sourceParam] && { source: srcMap[sourceParam] }),
+          ...(sourceParam !== "all" && sourceFromParam(sourceParam) && { source: sourceFromParam(sourceParam) }),
         },
         orderBy: { startedAt: "desc" },
         select: {
@@ -190,9 +188,6 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const legacyStatusMap: Record<string, "SYNCED" | "FAILED" | "NEEDS_APPROVAL" | "PENDING"> = {
     synced: "SYNCED", failed: "FAILED", needs_approval: "NEEDS_APPROVAL", pending: "PENDING",
   };
-  const legacySrcMap: Record<string, "BASECAMP" | "GOOGLE_CALENDAR" | "GOOGLE_TASKS"> = {
-    basecamp: "BASECAMP", calendar: "GOOGLE_CALENDAR", tasks: "GOOGLE_TASKS",
-  };
   const startedAtFilter: { gte?: Date; lte?: Date } = {};
   if (from) startedAtFilter.gte = new Date(from);
   if (to) {
@@ -210,7 +205,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
       where: {
         userId: user.id,
         ...(status !== "all" && legacyStatusMap[status] && { syncStatus: legacyStatusMap[status] }),
-        ...(source !== "all" && legacySrcMap[source] && { source: legacySrcMap[source] }),
+        ...(source !== "all" && sourceFromParam(source) && { source: sourceFromParam(source) }),
         ...(Object.keys(startedAtFilter).length > 0 && { startedAt: startedAtFilter }),
       },
       orderBy: { startedAt: "desc" },
@@ -226,7 +221,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
       where: {
         userId: user.id,
         ...(status !== "all" && legacyStatusMap[status] && { syncStatus: legacyStatusMap[status] }),
-        ...(source !== "all" && legacySrcMap[source] && { source: legacySrcMap[source] }),
+        ...(source !== "all" && sourceFromParam(source) && { source: sourceFromParam(source) }),
         ...(Object.keys(startedAtFilter).length > 0 && { startedAt: startedAtFilter }),
       },
     }),

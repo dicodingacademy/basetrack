@@ -12,6 +12,7 @@ import { HourHeatmap } from "./HourHeatmap";
 import { WeekBarChart } from "./WeekBarChart";
 import { EntryRow } from "./EntryRow";
 import { MonthlyPanel } from "./MonthlyPanel";
+import { SOURCES } from "../../lib/sources";
 import type { HistoryFetcherData, TimeEntryRow } from "../../types/tracker";
 
 const SELECT_CLASS = "h-8 rounded-lg border border-border bg-card px-2.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary";
@@ -224,9 +225,9 @@ export function HistoryPanel() {
             </select>
             <select value={source} onChange={e => setSource(e.target.value)} className={SELECT_CLASS}>
               <option value="all">All sources</option>
-              <option value="basecamp">Basecamp</option>
-              <option value="calendar">Google Calendar</option>
-              <option value="tasks">Google Tasks</option>
+              {SOURCES.map(s => (
+                <option key={s.key} value={s.param}>{s.label}</option>
+              ))}
             </select>
           </div>
 

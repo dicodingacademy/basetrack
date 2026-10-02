@@ -6,6 +6,7 @@ import { ChartContainer, ChartTooltip, type ChartConfig } from "../ui/chart";
 import { cn } from "../../lib/utils";
 import { fmtDurationShort } from "../../lib/format";
 import { Flame, Target, TrendingUp } from "lucide-react";
+import { SOURCES } from "../../lib/sources";
 import type { HistoryFetcherData, TimeEntryRow, DailyTotal } from "../../types/tracker";
 
 // ── static config ─────────────────────────────────────────────────────────────
@@ -15,11 +16,7 @@ const BAR_CONFIG: ChartConfig = {
   sec:      { label: "Time tracked", color: "var(--primary)" },
 };
 
-const SOURCE_COLORS: Record<string, string> = {
-  BASECAMP:        "var(--primary)",
-  GOOGLE_CALENDAR: "#3b82f6",
-  GOOGLE_TASKS:    "#22c55e",
-};
+const SOURCE_COLORS: Record<string, string> = Object.fromEntries(SOURCES.map(s => [s.key, s.color]));
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
@@ -528,12 +525,9 @@ export function MonthlyPanel({ data, isLoading }: { data: HistoryFetcherData; is
     .map(([name, es]) => ({ name, totalSec: es.reduce((s, e) => s + e.durationSec, 0), count: es.length }))
     .sort((a, b) => b.totalSec - a.totalSec).slice(0, 6);
 
-  const sources = [
-    { key: "BASECAMP",        label: "Basecamp" },
-    { key: "GOOGLE_CALENDAR", label: "Google Calendar" },
-    { key: "GOOGLE_TASKS",    label: "Google Tasks" },
-  ].map(s => ({
-    ...s,
+  const sources = SOURCES.map(s => ({
+    key: s.key,
+    label: s.label,
     sec: entries.filter(e => e.source === s.key).reduce((sum, e) => sum + e.durationSec, 0),
   })).filter(s => s.sec > 0);
 

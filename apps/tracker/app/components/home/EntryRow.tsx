@@ -1,13 +1,10 @@
 import { cn } from "../../lib/utils";
 import { Button } from "../ui/button";
 import { fmtDurationShort } from "../../lib/format";
+import { SOURCES } from "../../lib/sources";
 import type { TimeEntryRow } from "../../types/tracker";
 
-export const SOURCE_BAR: Record<string, string> = {
-  BASECAMP: "bg-primary",
-  GOOGLE_CALENDAR: "bg-blue-500",
-  GOOGLE_TASKS: "bg-emerald-500",
-};
+export const SOURCE_BAR: Record<string, string> = Object.fromEntries(SOURCES.map(s => [s.key, s.bar]));
 
 export const STATUS_STYLE: Record<string, string> = {
   SYNCED: "bg-emerald-500/15 text-emerald-400",
