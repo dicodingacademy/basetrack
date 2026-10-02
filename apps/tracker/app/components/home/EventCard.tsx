@@ -83,7 +83,7 @@ export function BasecampTaskCard({ task, projectId, projectName, activeTimer, on
         <Button
           variant="outline"
           size="sm"
-          disabled={isPending || (!!activeTimer && !isActive)}
+          disabled={isPending}
           onClick={() => onStart({ todoId: task.id, todoTitle: task.title, projectId, projectName })}
           className="gap-1.5"
         >
