@@ -42,6 +42,8 @@ services:
       WS_PUBLIC_URL: ${WS_PUBLIC_URL:-ws://localhost:8081}
       # Internal auth key for service-to-service
       INTERNAL_API_KEY: ${INTERNAL_API_KEY}
+      # Browser extension redirect URIs (empty = built-in defaults)
+      EXTENSION_REDIRECT_URIS: ${EXTENSION_REDIRECT_URIS:-}
     depends_on:
       db:
         condition: service_healthy
