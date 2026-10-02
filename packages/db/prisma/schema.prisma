@@ -31,6 +31,38 @@ model User {
   timezone               String       @default("Asia/Jakarta")
   apiKey                 String?      @unique
   oAuthTokens            OAuthToken[]
+  extensionAuthCodes     ExtensionAuthCode[]
+  extensionTokens        ExtensionToken[]
+}
+
+/// Short-lived, single-use code issued by /extension/authorize (PKCE).
+model ExtensionAuthCode {
+  id            String    @id @default(cuid())
+  codeHash      String    @unique
+  userId        String
+  redirectUri   String
+  codeChallenge String
+  clientName    String
+  expiresAt     DateTime
+  usedAt        DateTime?
+  createdAt     DateTime  @default(now())
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+/// Bearer token held by a browser extension; only its SHA-256 hash is stored.
+model ExtensionToken {
+  id         String    @id @default(cuid())
+  tokenHash  String    @unique
+  userId     String
+  name       String
+  lastUsedAt DateTime?
+  revokedAt  DateTime?
+  createdAt  DateTime  @default(now())
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }
 
 model OAuthToken {
