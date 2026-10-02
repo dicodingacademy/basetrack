@@ -11,6 +11,7 @@ import { prisma } from "../utils/db.server";
 import { randomUUID } from "node:crypto";
 import { registry } from "../integrations/registry";
 import { disconnectProvider, getConnectedProviders } from "../integrations/token.server";
+import { listExtensionTokens, revokeExtensionToken } from "../services/extension-auth.server";
 import type { TrackableItem } from "../integrations/types";
 
 import { cn } from "../lib/utils";
@@ -141,10 +142,11 @@ export async function loader({ request }: Route.LoaderArgs) {
     user = await getUserFromSessionId(sessionId);
   }
 
-  const [activeTimer, rules, connectedProviderIds] = await Promise.all([
+  const [activeTimer, rules, connectedProviderIds, extensionTokens] = await Promise.all([
     getActiveTimer(user!.id),
     getRules(user!.id),
     getConnectedProviders(user!.id),
+    listExtensionTokens(user!.id),
   ]);
 
   const providerGroups = connectedProviderIds.flatMap(id => {
@@ -173,6 +175,7 @@ export async function loader({ request }: Route.LoaderArgs) {
     connectedProviders: connectedProviderIds,
     providerGroups,
     availableProviders,
+    extensionTokens,
     activeTimer,
     rules: rules.map(r => ({ ...r, conditions: r.conditions as unknown as Condition[] })),
     wsUrl: process.env.WS_PUBLIC_URL || "ws://localhost:8081",
@@ -242,6 +245,13 @@ export async function action({ request }: Route.ActionArgs) {
     return { success: true };
   }
 
+  if (intent === "REVOKE_EXTENSION") {
+    const tokenId = formData.get("tokenId") as string;
+    if (!tokenId) return new Response("Token ID required", { status: 400 });
+    await revokeExtensionToken(user.id, tokenId);
+    return { success: true };
+  }
+
   if (intent === "DISCONNECT") {
     const provider = formData.get("provider") as string;
     if (!provider) return new Response("Provider required", { status: 400 });
@@ -253,7 +263,7 @@ export async function action({ request }: Route.ActionArgs) {
 }
 
 export default function Home({ loaderData }: Route.ComponentProps) {
-  const { user, activeTimer: serverActiveTimer, showLanding, wsUrl, connectedProviders, providerGroups, availableProviders, rules } = loaderData;
+  const { user, activeTimer: serverActiveTimer, showLanding, wsUrl, connectedProviders, providerGroups, availableProviders, extensionTokens, rules } = loaderData;
 
   const allProviderTabs = (providerGroups ?? []).flatMap(g => g.tabs);
 
@@ -482,6 +492,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
                     apiKey={user.apiKey}
                     connectedProviders={connectedProviders}
                     availableProviders={availableProviders}
+                    extensionTokens={extensionTokens}
                   />
                 </div>
               </SidebarMenuButton>

@@ -13,7 +13,7 @@ import {
 import { Input } from "../ui/input";
 import { Label } from "../ui/label";
 import { RuleList } from "./RuleList";
-import { Settings, Loader2, CheckCircle2, XCircle, LogOut } from "lucide-react";
+import { Settings, Loader2, CheckCircle2, XCircle, LogOut, Puzzle } from "lucide-react";
 import { useTheme } from "../../hooks/useTheme";
 import { cn } from "~/lib/utils";
 import type { AutoStopRuleData } from "./types";
@@ -24,6 +24,7 @@ type SettingsModalProps = {
   apiKey?: string | null;
   connectedProviders: string[];
   availableProviders: { id: string; label: string; scopes: string }[];
+  extensionTokens: { id: string; name: string; createdAt: Date | string; lastUsedAt: Date | string | null }[];
 };
 
 const THEMES = [
@@ -34,7 +35,11 @@ const THEMES = [
   { id: "lavender", label: "Lavender", dot: "#818cf8", bg: "#f4f0fb" },
 ] as const;
 
-export function SettingsModal({ rules: initialRules, userTimezone, apiKey, connectedProviders, availableProviders }: SettingsModalProps) {
+function fmtDate(value: Date | string) {
+  return new Date(value).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
+}
+
+export function SettingsModal({ rules: initialRules, userTimezone, apiKey, connectedProviders, availableProviders, extensionTokens }: SettingsModalProps) {
   const [open, setOpen] = useState(false);
   const fetcher = useFetcher();
   const { theme, setTheme } = useTheme();
@@ -136,6 +141,38 @@ export function SettingsModal({ rules: initialRules, userTimezone, apiKey, conne
                 </Button>
               </div>
             </div>
+          </div>
+
+          <div className="border-t pt-4">
+            <h4 className="text-sm font-medium mb-1">Browser Extensions</h4>
+            <p className="text-xs text-muted-foreground mb-3">
+              Extensions that can start and stop timers from Google Calendar, Google Docs and GitHub Projects.
+            </p>
+            {extensionTokens.length === 0 ? (
+              <p className="text-xs text-muted-foreground">No extensions connected.</p>
+            ) : (
+              <ul className="space-y-2">
+                {extensionTokens.map(t => (
+                  <li key={t.id} className="flex items-center gap-3 rounded-md border px-3 py-2">
+                    <Puzzle className="size-4 shrink-0 text-muted-foreground" />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium truncate">{t.name}</p>
+                      <p className="text-[11px] text-muted-foreground">
+                        Connected {fmtDate(t.createdAt)}
+                        {t.lastUsedAt ? ` · last used ${fmtDate(t.lastUsedAt)}` : ""}
+                      </p>
+                    </div>
+                    <fetcher.Form method="post">
+                      <input type="hidden" name="intent" value="REVOKE_EXTENSION" />
+                      <input type="hidden" name="tokenId" value={t.id} />
+                      <Button type="submit" variant="outline" size="sm" disabled={fetcher.state !== "idle"}>
+                        Revoke
+                      </Button>
+                    </fetcher.Form>
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
 
           <div className="border-t pt-4">
