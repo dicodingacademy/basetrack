@@ -13,27 +13,36 @@ export async function action({ request }: ActionFunctionArgs) {
   const entryId = formData.get("entryId") as string;
   if (!entryId) return data({ success: false, syncError: "Missing entryId" }, { status: 400 });
 
-  const entry = await prisma.timeEntry.findFirst({
-    where: { id: entryId, userId: user.id, syncStatus: "FAILED" },
+  // Atomically claim the entry so a double-click can't sync it to Basecamp twice.
+  const claimed = await prisma.timeEntry.updateMany({
+    where: { id: entryId, userId: user.id, syncStatus: "FAILED", durationSec: { gte: 60 } },
+    data: { syncStatus: "PENDING" },
   });
 
-  if (!entry) return data({ success: false, syncError: "Entry not found or not retryable" }, { status: 404 });
-
-  if (entry.durationSec < 60) {
-    return data({ success: false, syncError: "Duration too short (minimum 60 s for Basecamp)" }, { status: 422 });
+  if (claimed.count === 0) {
+    const existing = await prisma.timeEntry.findFirst({ where: { id: entryId, userId: user.id, syncStatus: "FAILED" } });
+    if (existing && existing.durationSec < 60) {
+      return data({ success: false, syncError: "Duration too short (minimum 60 s for Basecamp)" }, { status: 422 });
+    }
+    return data({ success: false, syncError: "Entry not found or not retryable" }, { status: 404 });
   }
+
+  const entry = await prisma.timeEntry.findUniqueOrThrow({ where: { id: entryId } });
 
   let syncStatus: "SYNCED" | "FAILED" = "FAILED";
   let syncError: string | null = null;
 
   try {
     const accessToken = await getValidAccessToken(user.id);
-    const stoppedAt = entry.stoppedAt;
-    const yyyy = stoppedAt.getFullYear();
-    const mm = String(stoppedAt.getMonth() + 1).padStart(2, "0");
-    const dd = String(stoppedAt.getDate()).padStart(2, "0");
+    // en-CA formats as YYYY-MM-DD; use the user's timezone, not the server's.
+    let date: string;
+    try {
+      date = entry.stoppedAt.toLocaleDateString("en-CA", { timeZone: user.timezone });
+    } catch {
+      date = entry.stoppedAt.toLocaleDateString("en-CA");
+    }
     const payload = {
-      date: `${yyyy}-${mm}-${dd}`,
+      date,
       hours: Number((entry.durationSec / 3600).toFixed(2)),
       description: entry.source === "BASECAMP" ? "Tracked via BaseTrack" : entry.todoTitle,
     };
