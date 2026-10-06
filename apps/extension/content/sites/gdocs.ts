@@ -1,35 +1,27 @@
-// UNVERIFIED SELECTORS — Google Docs class names are not a public API.
-// Everything site-specific lives here so it can be fixed in one place.
+import { query } from "../dom";
+
 export const GDOCS = {
-  /** The editable document name in the title bar. */
-  titleInput: ".docs-title-input",
-  /** Share button container; the widget is inserted just before it. */
-  shareButton: ["#docs-titlebar-share-client-button", ".docs-titlebar-buttons > *:last-child"],
+  titleInput: [".docs-title-input", ".docs-title-input-label-inner"],
+  titleAnchor: [".docs-title-widget"],
 };
 
 export type GoogleDoc = { docId: string; title: string };
 
 export function currentDoc(): GoogleDoc | null {
-  // /document/d/<id>/edit and /document/u/0/d/<id>/edit
   const match = location.pathname.match(/\/document\/(?:u\/\d+\/)?d\/([\w-]+)/);
   if (!match?.[1]) return null;
   return { docId: match[1], title: currentTitle() };
 }
 
 function currentTitle(): string {
-  const input = document.querySelector<HTMLInputElement>(GDOCS.titleInput);
-  const fromInput = input?.value.trim();
-  if (fromInput) return fromInput;
-  // "<name> - Google Docs" (suffix is localized, e.g. "- Google Dokumen")
-  const title = document.title;
-  const cut = title.lastIndexOf(" - ");
-  return (cut > 0 ? title.slice(0, cut) : title).trim() || "Untitled document";
+  const title = query<HTMLElement>(document, GDOCS.titleInput);
+  const fromTitle = title instanceof HTMLInputElement ? title.value.trim() : title?.textContent?.trim();
+  if (fromTitle) return fromTitle;
+  const docTitle = document.title;
+  const cut = docTitle.lastIndexOf(" - ");
+  return (cut > 0 ? docTitle.slice(0, cut) : docTitle).trim() || "Untitled document";
 }
 
-export function findShareAnchor(): HTMLElement | null {
-  for (const sel of GDOCS.shareButton) {
-    const el = document.querySelector<HTMLElement>(sel);
-    if (el?.parentElement) return el;
-  }
-  return null;
+export function findTitleAnchor(): HTMLElement | null {
+  return query<HTMLElement>(document, GDOCS.titleAnchor);
 }
