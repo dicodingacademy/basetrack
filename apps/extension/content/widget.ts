@@ -4,11 +4,6 @@ import { getAuth, getMappings, getTimer, KEYS, onStorageChange, resolveProject }
 import type { ActiveTimer, ItemInfo, Mappings, Project } from "../lib/types";
 import { WIDGET_CSS } from "./widget.css";
 
-/**
- * Preferred side for the project picker. The picker is `position: fixed` and
- * flips automatically when there isn't room, so it is never clipped by the
- * page's own scroll containers. "flow" is kept as an alias of "below".
- */
 export type Placement = "flow" | "below" | "above";
 
 export type Widget = {
@@ -17,8 +12,6 @@ export type Widget = {
   destroy(): void;
 };
 
-// Events that would otherwise bubble out of the shadow root and trigger page
-// shortcuts or "click outside" handlers (e.g. GitHub closing its side pane).
 const ISOLATED_EVENTS = ["keydown", "keyup", "keypress", "mousedown", "mouseup", "pointerdown", "pointerup", "click"];
 
 const PANEL_WIDTH = 300;
@@ -35,7 +28,6 @@ const ICON_SEARCH = `<svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="7" 
 const ICON_CHECK = `<svg viewBox="0 0 16 16" aria-hidden="true"><path d="m3.5 8.5 3 3 6-7" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 const ICON_REFRESH = `<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M13 8a5 5 0 1 1-1.46-3.54M13 3v3h-3" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 
-/** Picks light/dark from the page itself (Calendar/GitHub/Docs have their own themes, independent of the OS). */
 function detectTheme(from: Element): "light" | "dark" {
   for (let el: Element | null = from; el; el = el.parentElement) {
     const m = getComputedStyle(el).backgroundColor.match(/rgba?\(([\d.]+),\s*([\d.]+),\s*([\d.]+)(?:,\s*([\d.]+))?/);
@@ -105,6 +97,7 @@ export function createWidget({ placement, floating = false }: { placement: Place
 
   let item: ItemInfo | null = null;
   let connected = false;
+  let ready = false;
   let timer: ActiveTimer | null = null;
   let mappings: Mappings = { defaults: {}, contexts: {} };
   let projects: Project[] | null = null;
@@ -118,7 +111,6 @@ export function createWidget({ placement, floating = false }: { placement: Place
   const resolved = () => (item ? resolveProject(mappings, item.source, item.context.key) : null);
   const isOpen = () => !panel.hidden;
 
-  /** Places a fixed-position element next to the button, flipping sides and clamping to the viewport. */
   function anchor(el: HTMLElement, width: number) {
     const r = bar.getBoundingClientRect();
     el.style.width = `${width}px`;
@@ -132,7 +124,6 @@ export function createWidget({ placement, floating = false }: { placement: Place
     const left = Math.min(Math.max(r.right - width, MARGIN), innerWidth - width - MARGIN);
     el.style.left = `${left}px`;
     el.style.top = `${Math.max(MARGIN, top)}px`;
-    // A transformed ancestor turns `fixed` into `absolute`; measure and correct the offset.
     const actual = el.getBoundingClientRect();
     el.style.left = `${left - (actual.left - left)}px`;
     el.style.top = `${Math.max(MARGIN, top) - (actual.top - Math.max(MARGIN, top))}px`;
@@ -160,6 +151,7 @@ export function createWidget({ placement, floating = false }: { placement: Place
   }
 
   function render() {
+    if (!ready) return;
     root.hidden = !item;
     if (!item) return;
 
@@ -223,7 +215,6 @@ export function createWidget({ placement, floating = false }: { placement: Place
     const q = search.value.trim().toLowerCase();
     const mapped = resolved()?.id;
     matches = projects.filter((p) => p.name.toLowerCase().includes(q));
-    // Keep the mapped project on top when not searching, so Enter picks it.
     if (!q && mapped) matches.sort((a, b) => Number(b.id === mapped) - Number(a.id === mapped));
     if (matches.length === 0) return emptyRow("No matching projects");
 
@@ -359,7 +350,6 @@ export function createWidget({ placement, floating = false }: { placement: Place
   });
   refreshBtn.addEventListener("click", () => void loadProjects(true));
 
-  // Google Calendar cancels wheel events at the document level, so scroll the list ourselves.
   list.addEventListener(
     "wheel",
     (e) => {
@@ -370,7 +360,6 @@ export function createWidget({ placement, floating = false }: { placement: Place
     },
     { passive: false },
   );
-  // Keep wheel/touch scrolling inside the picker from reaching the page.
   for (const type of ["wheel", "touchmove"]) panel.addEventListener(type, (e) => e.stopPropagation(), { passive: true });
 
   const onOutside = (e: Event) => {
@@ -386,6 +375,7 @@ export function createWidget({ placement, floating = false }: { placement: Place
     connected = !!auth;
     timer = auth ? t.activeTimer : null;
     mappings = m;
+    ready = true;
     render();
   }
 
