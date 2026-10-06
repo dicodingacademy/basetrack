@@ -5,7 +5,9 @@ Extension browser (Chrome + Firefox, Manifest V3) untuk memulai timer Basetrack 
 | Situs | Tempat tombol muncul | ID item (`todoId`) | Konteks mapping |
 |---|---|---|---|
 | Google Calendar | di dalam popover detail event; pill mengambang di halaman edit event | event id hasil decode `data-eventid` | `gcal:<calendarId>` |
-| Google Docs | di title bar, sebelah judul dokumen (fallback: pill mengambang) | docId dari URL | `gdocs:<docId>` |
+| Google Docs | di title bar, sebelah tombol Share (fallback: pill mengambang) | docId dari URL | `gdocs:<docId>` |
+| Google Sheets | di title bar, sebelah tombol Share (fallback: pill mengambang) | spreadsheet id dari URL | `gsheets:<id>` |
+| Google Slides | di title bar, sebelah tombol Share (fallback: pill mengambang) | presentation id dari URL | `gslides:<id>` |
 | GitHub Org Projects | di side pane item, sebelah badge status (fallback: pill mengambang) | `owner/repo#123` atau `draft:<itemId>` | `gh:<org>/<nomor project>` |
 
 Semua request ke Basetrack lewat background script. Content script hanya membaca halaman dan mengirim pesan ke background.
@@ -57,7 +59,7 @@ Redirect URL yang benar-benar dipakai bisa dicek di halaman **Options → Connec
 ## Cara pakai
 
 1. Klik ikon Basetrack → **Connect to Basetrack**. Browser membuka halaman izin Basetrack (login Basecamp dulu kalau belum), lalu kembali ke extension.
-2. Buka event, dokumen, atau item GitHub Project → klik **▶ Start**.
+2. Buka event, dokumen/spreadsheet/presentasi Google, atau item GitHub Project → klik **▶ Start**.
    - Kalau konteksnya sudah punya mapping, tombol menjadi **▶ Start · Nama Project**; klik ▾ untuk memilih project lain.
    - Kalau belum, picker project terbuka. Centang **Remember for …** supaya pilihan disimpan.
 3. Kalau timer lain sedang jalan, server otomatis menghentikan dan menyimpannya (auto-switch).
@@ -77,11 +79,15 @@ entrypoints/
   options/              mapping project & akun
   gcal.content.ts       Google Calendar
   gdocs.content.ts      Google Docs
+  gsheets.content.ts    Google Sheets
+  gslides.content.ts    Google Slides
   github.content.ts     GitHub Projects
 content/
+  gfiles.ts             factory content script Google Docs/Sheets/Slides
   widget.ts             tombol split + picker (Shadow DOM, vanilla TS)
   watch.ts              MutationObserver + polling URL untuk SPA
-  sites/*.ts            selector per situs — BELUM diverifikasi di halaman asli
+  dom.ts                helper query yang aman terhadap selector rusak
+  sites/*.ts            selector per situs
 lib/                    api, storage, tipe, pkce, format
 ```
 

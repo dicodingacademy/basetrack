@@ -1,8 +1,10 @@
-export type Source = "GOOGLE_CALENDAR" | "GOOGLE_DOCS" | "GITHUB_PROJECT";
+export type Source = "GOOGLE_CALENDAR" | "GOOGLE_DOCS" | "GOOGLE_SHEETS" | "GOOGLE_SLIDES" | "GITHUB_PROJECT";
 
 export const SOURCES: { key: Source; label: string }[] = [
   { key: "GOOGLE_CALENDAR", label: "Google Calendar" },
   { key: "GOOGLE_DOCS", label: "Google Docs" },
+  { key: "GOOGLE_SHEETS", label: "Google Sheets" },
+  { key: "GOOGLE_SLIDES", label: "Google Slides" },
   { key: "GITHUB_PROJECT", label: "GitHub Projects" },
 ];
 
