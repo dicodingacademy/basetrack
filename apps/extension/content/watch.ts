@@ -1,20 +1,22 @@
 import type { ContentScriptContext } from "wxt/utils/content-script-context";
 
-/**
- * Runs `scan` whenever the DOM changes (throttled) and whenever the URL
- * changes. SPA navigation (GitHub, Calendar) doesn't reload the content
- * script, and history events aren't observable from the isolated world, so a
- * cheap URL poll is the most reliable signal across Chrome and Firefox.
- */
 export function watchPage(ctx: ContentScriptContext, scan: () => void, { throttleMs = 250, urlPollMs = 500 } = {}) {
-  let scheduled = false;
+  let lastRun = 0;
+  let pending: ReturnType<typeof ctx.setTimeout> | undefined;
+
   const schedule = () => {
-    if (scheduled) return;
-    scheduled = true;
-    ctx.setTimeout(() => {
-      scheduled = false;
+    const elapsed = Date.now() - lastRun;
+    if (elapsed >= throttleMs) {
+      lastRun = Date.now();
       scan();
-    }, throttleMs);
+      return;
+    }
+    if (pending !== undefined) return;
+    pending = ctx.setTimeout(() => {
+      pending = undefined;
+      lastRun = Date.now();
+      scan();
+    }, throttleMs - elapsed);
   };
 
   const observer = new MutationObserver(schedule);
