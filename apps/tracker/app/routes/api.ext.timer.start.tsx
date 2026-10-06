@@ -3,7 +3,7 @@ import { getProjectTimesheetRecordingId, getValidAccessToken } from "../utils/ba
 import { extError, extJson, preflightLoader, requireExtensionUser } from "../utils/ext-api.server";
 import { callWsInternal } from "../utils/ws.server";
 
-const EXTENSION_SOURCES = new Set(["GOOGLE_CALENDAR", "GOOGLE_DOCS", "GITHUB_PROJECT"]);
+const EXTENSION_SOURCES = new Set(["GOOGLE_CALENDAR", "GOOGLE_DOCS", "GOOGLE_SHEETS", "GOOGLE_SLIDES", "GITHUB_PROJECT"]);
 
 function isText(value: unknown, max = 255): value is string {
   return typeof value === "string" && value.trim().length > 0 && value.length <= max;
