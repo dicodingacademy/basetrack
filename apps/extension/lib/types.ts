@@ -6,6 +6,8 @@ export const SOURCES: { key: Source; label: string }[] = [
   { key: "GITHUB_PROJECT", label: "GitHub Projects" },
 ];
 
+export type GFileKind = "document" | "spreadsheets" | "presentation";
+
 export type Project = { id: string; name: string };
 
 export type ActiveTimer = {
@@ -14,7 +16,7 @@ export type ActiveTimer = {
   projectId: string;
   projectName: string;
   source: string;
-  startedAt: string; // ISO
+  startedAt: string;
 };
 
 export type User = { name: string; email: string; timezone?: string };
@@ -23,9 +25,8 @@ export type AuthState = { token: string; user: User } | null;
 
 export type TimerState = { activeTimer: ActiveTimer | null; fetchedAt: number };
 
-/** A place a timer was started from, e.g. one calendar or one GitHub project. */
 export type TrackingContext = {
-  key: string; // gcal:<calendarId> | gdocs:<docId> | gh:<org>/<n>
+  key: string;
   label: string;
   source: Source;
   lastSeen: number;
@@ -36,12 +37,10 @@ export type Mappings = {
   contexts: Record<string, Project>;
 };
 
-/** What a content script knows about the item on screen. */
 export type ItemInfo = {
   source: Source;
   externalId: string;
   title: string;
-  /** Basecamp timesheet description; the server falls back to `title`. */
   description?: string;
   context: { key: string; label: string };
 };
