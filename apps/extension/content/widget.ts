@@ -44,7 +44,7 @@ function initials(name: string) {
   return ((words[0]?.[0] ?? "?") + (words[1]?.[0] ?? "")).toUpperCase();
 }
 
-export function createWidget({ placement, floating = false }: { placement: Placement; floating?: boolean }): Widget {
+export function createWidget({ placement, floating = false, large = false }: { placement: Placement; floating?: boolean; large?: boolean }): Widget {
   const side: "below" | "above" = placement === "above" ? "above" : "below";
   const host = document.createElement("basetrack-timer");
   host.style.cssText = floating
@@ -55,7 +55,7 @@ export function createWidget({ placement, floating = false }: { placement: Place
   const shadow = host.attachShadow({ mode: "open" });
   shadow.innerHTML = `
     <style>${WIDGET_CSS}</style>
-    <div class="bt${floating ? " floating" : ""}" hidden>
+    <div class="bt${floating ? " floating" : ""}${large ? " lg" : ""}" hidden>
       <div class="bar">
         <button class="main" type="button"><span class="ic"></span><span class="label"></span></button>
         <button class="caret" type="button" title="Choose another project" aria-label="Choose another project">${ICON_CARET}</button>

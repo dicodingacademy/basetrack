@@ -60,6 +60,14 @@ button { appearance: none; border: 0; background: none; padding: 0; cursor: poin
 button:disabled { opacity: .6; cursor: progress; }
 button:focus-visible { outline: 2px solid var(--bt-primary); outline-offset: 2px; }
 
+.bt.lg { font: 500 14px/18px "Google Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+.bt.lg .bar { height: 40px; }
+.bt.lg .main, .bt.lg .caret { height: 40px; }
+.bt.lg .main { padding: 0 18px 0 14px; border-radius: 20px; }
+.bt.lg .bar.split .main { border-radius: 20px 0 0 20px; padding-right: 14px; }
+.bt.lg .caret { padding: 0 12px 0 10px; border-radius: 0 20px 20px 0; }
+.bt.lg .main.neutral { padding: 0 18px; }
+
 /* ── popovers (fixed; positioned in JS) ──────────────────── */
 .panel, .toast {
   position: fixed;
