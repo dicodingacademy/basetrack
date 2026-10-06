@@ -5,8 +5,8 @@ Extension browser (Chrome + Firefox, Manifest V3) untuk memulai timer Basetrack 
 | Situs | Tempat tombol muncul | ID item (`todoId`) | Konteks mapping |
 |---|---|---|---|
 | Google Calendar | di dalam popover detail event; pill mengambang di halaman edit event | event id hasil decode `data-eventid` | `gcal:<calendarId>` |
-| Google Docs | di title bar sebelah tombol Share (fallback: pill mengambang) | docId dari URL | `gdocs:<docId>` |
-| GitHub Org Projects | pill mengambang saat side pane item terbuka | `owner/repo#123` atau `draft:<itemId>` | `gh:<org>/<nomor project>` |
+| Google Docs | di title bar, sebelah judul dokumen (fallback: pill mengambang) | docId dari URL | `gdocs:<docId>` |
+| GitHub Org Projects | di side pane item, sebelah badge status (fallback: pill mengambang) | `owner/repo#123` atau `draft:<itemId>` | `gh:<org>/<nomor project>` |
 
 Semua request ke Basetrack lewat background script. Content script hanya membaca halaman dan mengirim pesan ke background.
 
