@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.3.0] - 2026-10-07
+
+### Added
+- Basecamp support: start timers from Basecamp itself.
+  - To-do and card pages: button in the item toolbar (context `basecamp:<projectId>`).
+  - Card-table boards: small icon button on each card, expands on hover.
+  - To-do list and to-do set pages (list view): button on each to-do row.
+- Basecamp items start directly in their own project — no project picker.
+
+### Changed
+- Widget gained a compact "mini" variant (icon only, reveals its label on hover).
+
+### Fixed
+- Basecamp no longer requires a project-level timesheet recording: time is logged against the item (to-do/card), so projects whose entries are all attached to items are no longer wrongly blocked.
+
 ## [0.2.0] - 2026-10-06
 
 ### Added
