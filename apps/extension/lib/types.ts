@@ -1,6 +1,7 @@
-export type Source = "GOOGLE_CALENDAR" | "GOOGLE_DOCS" | "GOOGLE_SHEETS" | "GOOGLE_SLIDES" | "GITHUB_PROJECT";
+export type Source = "BASECAMP" | "GOOGLE_CALENDAR" | "GOOGLE_DOCS" | "GOOGLE_SHEETS" | "GOOGLE_SLIDES" | "GITHUB_PROJECT";
 
 export const SOURCES: { key: Source; label: string }[] = [
+  { key: "BASECAMP", label: "Basecamp" },
   { key: "GOOGLE_CALENDAR", label: "Google Calendar" },
   { key: "GOOGLE_DOCS", label: "Google Docs" },
   { key: "GOOGLE_SHEETS", label: "Google Sheets" },

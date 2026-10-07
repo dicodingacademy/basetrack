@@ -4,6 +4,7 @@ Extension browser (Chrome + Firefox, Manifest V3) untuk memulai timer Basetrack 
 
 | Situs | Tempat tombol muncul | ID item (`todoId`) | Konteks mapping |
 |---|---|---|---|
+| Basecamp | di toolbar halaman to-do / kartu (fallback: pill mengambang) | id numerik item dari URL | `basecamp:<projectId>` |
 | Google Calendar | di dalam popover detail event; pill mengambang di halaman edit event | event id hasil decode `data-eventid` | `gcal:<calendarId>` |
 | Google Docs | di title bar, sebelah tombol Share (fallback: pill mengambang) | docId dari URL | `gdocs:<docId>` |
 | Google Sheets | di title bar, sebelah tombol Share (fallback: pill mengambang) | spreadsheet id dari URL | `gsheets:<id>` |

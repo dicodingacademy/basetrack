@@ -20,7 +20,7 @@ export default defineConfig({
 
     return {
       name: "Basetrack",
-      description: "Start Basetrack timers from Google Calendar, Docs, Sheets, Slides and GitHub Projects.",
+      description: "Start Basetrack timers from Basecamp, Google Calendar, Docs, Sheets, Slides and GitHub Projects.",
       permissions: ["identity", "storage", "alarms"],
       host_permissions: [origin, ...SITE_ORIGINS],
       action: { default_title: "Basetrack" },
