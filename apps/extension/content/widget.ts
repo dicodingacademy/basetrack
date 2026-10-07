@@ -44,18 +44,18 @@ function initials(name: string) {
   return ((words[0]?.[0] ?? "?") + (words[1]?.[0] ?? "")).toUpperCase();
 }
 
-export function createWidget({ placement, floating = false, large = false }: { placement: Placement; floating?: boolean; large?: boolean }): Widget {
+export function createWidget({ placement, floating = false, large = false, mini = false }: { placement: Placement; floating?: boolean; large?: boolean; mini?: boolean }): Widget {
   const side: "below" | "above" = placement === "above" ? "above" : "below";
   const host = document.createElement("basetrack-timer");
   host.style.cssText = floating
     ? "position:fixed;right:20px;bottom:20px;z-index:2147483646;"
     : "display:inline-flex;align-items:center;vertical-align:middle;margin:0 4px;";
-  for (const type of ISOLATED_EVENTS) host.addEventListener(type, (e) => e.stopPropagation());
+  for (const type of ISOLATED_EVENTS) host.addEventListener(type, (e) => { e.stopPropagation(); if (type === "click") e.preventDefault(); });
 
   const shadow = host.attachShadow({ mode: "open" });
   shadow.innerHTML = `
     <style>${WIDGET_CSS}</style>
-    <div class="bt${floating ? " floating" : ""}${large ? " lg" : ""}" hidden>
+    <div class="bt${floating ? " floating" : ""}${large ? " lg" : ""}${mini ? " mini" : ""}" hidden>
       <div class="bar">
         <button class="main" type="button"><span class="ic"></span><span class="label"></span></button>
         <button class="caret" type="button" title="Choose another project" aria-label="Choose another project">${ICON_CARET}</button>

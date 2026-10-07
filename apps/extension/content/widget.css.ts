@@ -68,6 +68,32 @@ button:focus-visible { outline: 2px solid var(--bt-primary); outline-offset: 2px
 .bt.lg .caret { padding: 0 12px 0 10px; border-radius: 0 20px 20px 0; }
 .bt.lg .main.neutral { padding: 0 18px; }
 
+.bt.mini .bar { height: 24px; }
+.bt.mini .main, .bt.mini .caret { height: 24px; }
+.bt.mini .main,
+.bt.mini .main.neutral {
+  width: auto;
+  min-width: 24px;
+  max-width: 24px;
+  padding: 0;
+  border-radius: 12px;
+  justify-content: center;
+  gap: 0;
+  overflow: hidden;
+  transition: max-width .22s cubic-bezier(.4, 0, .2, 1), padding .22s cubic-bezier(.4, 0, .2, 1), gap .22s cubic-bezier(.4, 0, .2, 1);
+}
+.bt.mini .main .label {
+  max-width: 0;
+  opacity: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  transition: max-width .22s cubic-bezier(.4, 0, .2, 1), opacity .16s ease .06s;
+}
+.bt.mini .caret { display: none; }
+.bt.mini:hover .main,
+.bt.mini:hover .main.neutral { max-width: 280px; padding: 0 12px 0 9px; gap: 6px; }
+.bt.mini:hover .main .label { max-width: 220px; opacity: 1; }
+
 /* ── popovers (fixed; positioned in JS) ──────────────────── */
 .panel, .toast {
   position: fixed;
