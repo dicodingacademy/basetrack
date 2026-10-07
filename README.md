@@ -31,7 +31,8 @@ Basetrack solves the friction of tracking time directly inside Basecamp. Instead
 | Data Persistence | Cloud only | Local PostgreSQL cache & sync |
 | Multi-tab Sync | No | Yes — Instant via WebSocket |
 | Desktop Widget | No | Yes — Native always-on-top companion app |
-| Third-party Integrations | No | Yes — Google Calendar & Tasks; extensible provider system |
+| Clients (extension + desktop) | No | Yes — timers started from the Basecamp extension & desktop app |
+| Monitoring dashboard | No | Yes — read-only: running timer, history, approvals |
 
 <details>
 <summary>Table of contents</summary>
@@ -41,7 +42,7 @@ Basetrack solves the friction of tracking time directly inside Basecamp. Instead
 - [Prerequisites](#prerequisites)
 - [Installation](#installation)
 - [Workspace Structure](#workspace-structure)
-- [Integrations](#integrations)
+- [Clients](#clients)
 - [Contributing](#contributing)
 
 </details>
@@ -58,12 +59,11 @@ Basetrack utilizes a modern monorepo architecture divided into distinct micro-ap
 │    (Tracker App)        │   │   (Instant Sync Hub)     │   │  (Companion UI)    │
 │                         │   └──────────────────────────┘   └────────────────────┘
 │  - Auth (OAuth2)        │                ▲
-│  - Integration layer    │                │
-│    ├─ OAuthProvider     │   ┌────────────┴─────────────┐
-│    ├─ TokenService      │   │     Worker / Cron        │
-│    └─ Provider registry │   │   (Standalone service)   │
-│  - API routes           │   └────────────┬─────────────┘
-│  - Prisma Client        │                │
+│  - Monitoring dashboard │                │
+│  - Extension REST API   │   ┌────────────┴─────────────┐
+│  - Client management    │   │     Worker / Cron        │
+│  - API routes           │   │   (Standalone service)   │
+│  - Prisma Client        │   └────────────┬─────────────┘
 └──────────┬──────────────┘                │
            ▼                               ▼
 ┌──────────────────────────────────────────┐
@@ -120,12 +120,11 @@ BASECAMP_CLIENT_ID="your-basecamp-client-id"
 BASECAMP_CLIENT_SECRET="your-basecamp-client-secret"
 BASECAMP_REDIRECT_URI="http://localhost:5173/auth/basecamp/callback"
 
-# Google OAuth2 Credentials (optional — enables Google Calendar & Tasks integration)
-# Create at https://console.cloud.google.com → APIs & Services → Credentials
-# Required scopes: calendar.readonly, tasks.readonly
-GOOGLE_CLIENT_ID="your-google-client-id"
-GOOGLE_CLIENT_SECRET="your-google-client-secret"
-GOOGLE_REDIRECT_URI="http://localhost:5173/auth/google/callback"
+# Google OAuth2 — no longer used by the tracker (the browser extension handles Google
+# Calendar/Docs/Sheets/Slides). Kept for reference; safe to omit.
+# GOOGLE_CLIENT_ID="your-google-client-id"
+# GOOGLE_CLIENT_SECRET="your-google-client-secret"
+# GOOGLE_REDIRECT_URI="http://localhost:5173/auth/google/callback"
 
 # The public URL where the WebSocket server is accessible by the Web/Desktop client
 WS_PUBLIC_URL="ws://localhost:8081"
@@ -196,7 +195,7 @@ This project uses npm workspaces to manage dependencies across multiple packages
 
 | Package / App | Location | Description |
 |---|---|---|
-| `apps-tracker` | `apps/tracker` | Main frontend and API server (React Router v8). Handles OAuth, UI, and user sessions. |
+| `apps-tracker` | `apps/tracker` | Read-only monitoring dashboard + API server (React Router v8). Handles OAuth, sessions, and the extension REST API. |
 | `@basetrack/desktop` | `apps/desktop` | Tauri v2 Desktop Companion App with an always-on-top transparent UI. |
 | `@basetrack/ws` | `apps/ws` | Standalone WebSocket Server for real-time timer sync across web and desktop. |
 | `@basetrack/cron` | `apps/cron` | Background Node.js worker. Checks for orphaned timers and marks them for manual approval. |
@@ -204,25 +203,17 @@ This project uses npm workspaces to manage dependencies across multiple packages
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
-## Integrations
+## Clients
 
-Basetrack supports third-party integrations via a provider registry. Each provider is self-contained — it defines its OAuth flow, scopes, sidebar tabs, and how to map its API responses to trackable items.
+Timers are started and stopped by clients, never by the tracker dashboard. The tracker is read-only: it monitors and syncs.
 
-**Built-in providers:**
+| Client | How it starts timers |
+|---|---|
+| Browser extension (`apps/extension`) | REST `/api/ext/timer/{start,stop}` — Basecamp, Google Calendar/Docs/Sheets/Slides, GitHub Projects |
+| Desktop app (`apps/desktop`) | WebSocket `START_TIMER` / `STOP_TIMER` using the personal API key |
+| Cron (`apps/cron`) | Auto-stop rules → `NEEDS_APPROVAL` entries you approve in the dashboard |
 
-| Provider | Tabs | Items |
-|---|---|---|
-| Google | Calendar, Tasks | Today's events and overdue tasks |
-
-**Adding a new provider** takes exactly 3 file changes: a new provider class, one registry line, and one icon mapping. The auth routes, DB token storage, and sidebar UI are all generic — they don't need to change.
-
-Engineers can use the `basetrack-add-provider` Claude Code skill for a step-by-step guide:
-
-```
-/basetrack-add-provider
-```
-
-The skill lives at `.claude/skills/basetrack-add-provider/SKILL.md`.
+To build a new client, use the extension REST API (see `extension.authorize` + `/api/ext/*`) or connect to the timer WebSocket and authenticate with the personal API key shown on the dashboard's **Clients** page.
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
