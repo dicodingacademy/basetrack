@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.3.1] - 2026-10-07
+
+### Fixed
+- Widget is built with DOM APIs instead of `innerHTML`, clearing the Firefox add-on validator's unsafe-innerHTML warnings.
+- Firefox minimum versions raised to 140 (desktop) and 142 (Android) so `data_collection_permissions` is supported.
+
 ## [0.3.0] - 2026-10-07
 
 ### Added
