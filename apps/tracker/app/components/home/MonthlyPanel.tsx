@@ -18,6 +18,8 @@ const BAR_CONFIG: ChartConfig = {
 
 const SOURCE_COLORS: Record<string, string> = Object.fromEntries(SOURCES.map(s => [s.key, s.color]));
 
+type TickProps = { x?: number | string; y?: number | string; payload?: { value?: unknown } };
+
 // ── helpers ───────────────────────────────────────────────────────────────────
 
 function groupBy<T>(items: T[], key: (i: T) => string): Record<string, T[]> {
@@ -153,10 +155,10 @@ function DailyChart({ dailyTotals, todayStr }: { dailyTotals: DailyTotal[]; toda
       <BarChart data={data} margin={{ top: 4, right: 0, bottom: 0, left: 0 }} barCategoryGap="12%">
         <XAxis
           dataKey="dayNum"
-          tick={({ x, y, payload }: any) => {
+          tick={({ x, y, payload }: TickProps) => {
             const v = Number(payload?.value);
             if (![1, 8, 15, 22, 29].includes(v)) return <g />;
-            return <text x={x} y={y + 4} textAnchor="middle" style={{ fill: "var(--foreground)", fontSize: 9 }}>{v}</text>;
+            return <text x={x} y={Number(y) + 4} textAnchor="middle" style={{ fill: "var(--foreground)", fontSize: 9 }}>{v}</text>;
           }}
           axisLine={false}
           tickLine={false}
@@ -210,8 +212,8 @@ function WeekChart({ dailyTotals }: { dailyTotals: DailyTotal[] }) {
       <BarChart data={data} margin={{ top: 4, right: 4, bottom: 0, left: 4 }}>
         <XAxis
           dataKey="label"
-          tick={({ x, y, payload }: any) => (
-            <text x={x} y={y + 4} textAnchor="middle" style={{ fill: "var(--foreground)", fontSize: 10 }}>{payload?.value}</text>
+          tick={({ x, y, payload }: TickProps) => (
+            <text x={x} y={Number(y) + 4} textAnchor="middle" style={{ fill: "var(--foreground)", fontSize: 10 }}>{String(payload?.value ?? "")}</text>
           )}
           axisLine={false}
           tickLine={false}
@@ -245,8 +247,8 @@ function WeekdayChart({ entries }: { entries: TimeEntryRow[] }) {
       <BarChart data={data} margin={{ top: 4, right: 4, bottom: 0, left: 4 }}>
         <XAxis
           dataKey="label"
-          tick={({ x, y, payload }: any) => (
-            <text x={x} y={y + 4} textAnchor="middle" style={{ fill: "var(--foreground)", fontSize: 9 }}>{payload?.value}</text>
+          tick={({ x, y, payload }: TickProps) => (
+            <text x={x} y={Number(y) + 4} textAnchor="middle" style={{ fill: "var(--foreground)", fontSize: 9 }}>{String(payload?.value ?? "")}</text>
           )}
           axisLine={false}
           tickLine={false}
@@ -284,10 +286,10 @@ function HourChart({ entries }: { entries: TimeEntryRow[] }) {
       <BarChart data={data} margin={{ top: 4, right: 0, bottom: 0, left: 0 }} barCategoryGap="8%">
         <XAxis
           dataKey="hour"
-          tick={({ x, y, payload }: any) => {
+          tick={({ x, y, payload }: TickProps) => {
             const label = LABELS[Number(payload?.value)];
             if (!label) return <g />;
-            return <text x={x} y={y + 4} textAnchor="middle" style={{ fill: "var(--foreground)", fontSize: 9 }}>{label}</text>;
+            return <text x={x} y={Number(y) + 4} textAnchor="middle" style={{ fill: "var(--foreground)", fontSize: 9 }}>{label}</text>;
           }}
           axisLine={false}
           tickLine={false}
@@ -328,10 +330,10 @@ function TasksChart({
           type="category"
           dataKey="name"
           width={130}
-          tick={({ x, y, payload }: any) => {
+          tick={({ x, y, payload }: TickProps) => {
             const v = String(payload?.value ?? "");
             const label = v.length > 22 ? v.slice(0, 22) + "…" : v;
-            return <text x={x - 4} y={y} dominantBaseline="central" textAnchor="end" style={{ fill: "var(--foreground)", fontSize: 10 }}>{label}</text>;
+            return <text x={Number(x) - 4} y={y} dominantBaseline="central" textAnchor="end" style={{ fill: "var(--foreground)", fontSize: 10 }}>{label}</text>;
           }}
           axisLine={false}
           tickLine={false}
@@ -390,10 +392,10 @@ function ProjectsChart({
           type="category"
           dataKey="name"
           width={110}
-          tick={({ x, y, payload }: any) => {
+          tick={({ x, y, payload }: TickProps) => {
             const v = String(payload?.value ?? "");
             const label = v.length > 18 ? v.slice(0, 18) + "…" : v;
-            return <text x={x - 4} y={y} dominantBaseline="central" textAnchor="end" style={{ fill: "var(--foreground)", fontSize: 10 }}>{label}</text>;
+            return <text x={Number(x) - 4} y={y} dominantBaseline="central" textAnchor="end" style={{ fill: "var(--foreground)", fontSize: 10 }}>{label}</text>;
           }}
           axisLine={false}
           tickLine={false}
