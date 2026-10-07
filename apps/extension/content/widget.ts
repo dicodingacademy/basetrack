@@ -44,6 +44,11 @@ function initials(name: string) {
   return ((words[0]?.[0] ?? "?") + (words[1]?.[0] ?? "")).toUpperCase();
 }
 
+function svgFrom(markup: string): Element {
+  const parsed = new DOMParser().parseFromString(markup, "image/svg+xml");
+  return document.importNode(parsed.documentElement, true);
+}
+
 export function createWidget({ placement, floating = false, large = false, mini = false }: { placement: Placement; floating?: boolean; large?: boolean; mini?: boolean }): Widget {
   const side: "below" | "above" = placement === "above" ? "above" : "below";
   const host = document.createElement("basetrack-timer");
@@ -53,8 +58,8 @@ export function createWidget({ placement, floating = false, large = false, mini 
   for (const type of ISOLATED_EVENTS) host.addEventListener(type, (e) => { e.stopPropagation(); if (type === "click") e.preventDefault(); });
 
   const shadow = host.attachShadow({ mode: "open" });
-  shadow.innerHTML = `
-    <style>${WIDGET_CSS}</style>
+  const template = new DOMParser().parseFromString(
+    `<style>${WIDGET_CSS}</style>
     <div class="bt${floating ? " floating" : ""}${large ? " lg" : ""}${mini ? " mini" : ""}" hidden>
       <div class="bar">
         <button class="main" type="button"><span class="ic"></span><span class="label"></span></button>
@@ -75,7 +80,10 @@ export function createWidget({ placement, floating = false, large = false, mini 
           <button class="icon-btn refresh" type="button" title="Refresh projects" aria-label="Refresh projects">${ICON_REFRESH}</button>
         </div>
       </div>
-    </div>`;
+    </div>`,
+    "text/html",
+  );
+  shadow.append(...Array.from(template.body.childNodes));
 
   const $ = <T extends HTMLElement>(sel: string) => shadow.querySelector(sel) as T;
   const root = $<HTMLDivElement>(".bt");
@@ -145,7 +153,7 @@ export function createWidget({ placement, floating = false, large = false, mini 
 
   function setIcon(svg: string) {
     if (mainIcon.dataset.icon !== svg) {
-      mainIcon.innerHTML = svg;
+      mainIcon.replaceChildren(...(svg ? [svgFrom(svg)] : []));
       mainIcon.dataset.icon = svg;
     }
   }
@@ -234,7 +242,7 @@ export function createWidget({ placement, floating = false, large = false, mini 
         if (p.id === mapped) {
           const check = document.createElement("span");
           check.className = "check";
-          check.innerHTML = ICON_CHECK;
+          check.append(svgFrom(ICON_CHECK));
           btn.append(check);
         }
         btn.addEventListener("mouseenter", () => highlight(i));

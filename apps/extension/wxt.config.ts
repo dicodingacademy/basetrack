@@ -29,9 +29,11 @@ export default defineConfig({
             browser_specific_settings: {
               gecko: {
                 id: GECKO_ID,
-                strict_min_version: "128.0",
-                // Page titles (events, docs, issues) are sent to the Basetrack server.
+                strict_min_version: "140.0",
                 data_collection_permissions: { required: ["websiteContent"] },
+              },
+              gecko_android: {
+                strict_min_version: "142.0",
               },
             },
           }
