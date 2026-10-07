@@ -3,3 +3,6 @@ postgres-data/
 .env
 .env.*
 !.env.example
+
+.playwright-mcp
+.commandcode/
