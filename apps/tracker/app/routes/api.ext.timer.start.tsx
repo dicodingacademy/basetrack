@@ -3,7 +3,7 @@ import { getProjectTimesheetRecordingId, getValidAccessToken } from "../utils/ba
 import { extError, extJson, preflightLoader, requireExtensionUser } from "../utils/ext-api.server";
 import { callWsInternal } from "../utils/ws.server";
 
-const EXTENSION_SOURCES = new Set(["GOOGLE_CALENDAR", "GOOGLE_DOCS", "GOOGLE_SHEETS", "GOOGLE_SLIDES", "GITHUB_PROJECT"]);
+const EXTENSION_SOURCES = new Set(["BASECAMP", "GOOGLE_CALENDAR", "GOOGLE_DOCS", "GOOGLE_SHEETS", "GOOGLE_SLIDES", "GITHUB_PROJECT"]);
 
 function isText(value: unknown, max = 255): value is string {
   return typeof value === "string" && value.trim().length > 0 && value.length <= max;
@@ -31,20 +31,24 @@ export async function action({ request }: ActionFunctionArgs) {
     return extError(400, "invalid_request", "source, externalId, title, projectId and projectName are required");
   }
 
-  // Extension items sync to the project-level timesheet; fail now rather than when the timer stops.
-  try {
-    const accessToken = await getValidAccessToken(user.id);
-    const recordingId = await getProjectTimesheetRecordingId(user.basecampAccountId, projectId, accessToken);
-    if (!recordingId) {
-      return extError(
-        422,
-        "timesheet_unavailable",
-        `"${projectName}" has no time entries in Basecamp yet. Log one time entry manually on this project's timesheet first.`
-      );
+  // Non-Basecamp items sync to the project-level timesheet, so fail now rather
+  // than when the timer stops. Basecamp items are recorded against the item
+  // itself (todo/card), so they need no project timesheet.
+  if (source !== "BASECAMP") {
+    try {
+      const accessToken = await getValidAccessToken(user.id);
+      const recordingId = await getProjectTimesheetRecordingId(user.basecampAccountId, projectId, accessToken);
+      if (!recordingId) {
+        return extError(
+          422,
+          "timesheet_unavailable",
+          `"${projectName}" has no time entries in Basecamp yet. Log one time entry manually on this project's timesheet first.`
+        );
+      }
+    } catch (err) {
+      console.error("[EXT] Timesheet check failed:", err);
+      return extError(502, "basecamp_unavailable", "Could not reach Basecamp");
     }
-  } catch (err) {
-    console.error("[EXT] Timesheet check failed:", err);
-    return extError(502, "basecamp_unavailable", "Could not reach Basecamp");
   }
 
   try {
