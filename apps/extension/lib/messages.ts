@@ -1,11 +1,5 @@
 import { browser } from "wxt/browser";
-import type {
-  Message,
-  ProjectsResponse,
-  SimpleResponse,
-  StartResponse,
-  StateResponse,
-} from "./types";
+import type { Message, ProjectsResponse, SimpleResponse, StartResponse, StateResponse } from "./types";
 
 type ResponseFor<M extends Message> = M extends { type: "getState" }
   ? StateResponse
@@ -15,7 +9,6 @@ type ResponseFor<M extends Message> = M extends { type: "getState" }
       ? StartResponse
       : SimpleResponse;
 
-/** Sends a message to the background script, which owns all Basetrack API calls. */
 export function send<M extends Message>(message: M): Promise<ResponseFor<M>> {
   return browser.runtime.sendMessage(message) as Promise<ResponseFor<M>>;
 }
