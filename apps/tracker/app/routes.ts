@@ -8,9 +8,6 @@ export default [
     route("clients", "routes/dashboard.clients.tsx"),
     route("settings", "routes/dashboard.settings.tsx"),
   ]),
-  route("api/check-timesheet", "routes/api.check-timesheet.tsx"),
-  route("api/provider-items", "routes/api.provider-items.tsx"),
-  route("api/project-tasks", "routes/api.project-tasks.tsx"),
   route("api/time-entries", "routes/api.time-entries.tsx"),
   route("api/time-entries/retry", "routes/api.time-entries.retry.tsx"),
   route("api/extension/token", "routes/api.extension.token.tsx"),
@@ -23,6 +20,4 @@ export default [
   route("auth/basecamp", "routes/auth.basecamp.tsx"),
   route("auth/callback", "routes/auth.callback.tsx"),
   route("auth/logout", "routes/auth.logout.tsx"),
-  route("auth/:provider", "routes/auth.$provider.tsx"),
-  route("auth/:provider/callback", "routes/auth.$provider.callback.tsx"),
 ] satisfies RouteConfig;
