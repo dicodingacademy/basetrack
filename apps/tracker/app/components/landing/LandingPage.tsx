@@ -21,13 +21,13 @@ const INTEGRATIONS = [
   },
   {
     label: "Google Calendar",
-    status: "Provider",
+    status: "Extension",
     logo: "/logos/google-calendar.svg",
     description: "Calendar events as trackable items",
   },
   {
     label: "Google Tasks",
-    status: "Provider",
+    status: "Extension",
     logo: "/logos/google-tasks.svg",
     description: "Task lists pulled into your timer queue",
   },
@@ -206,21 +206,21 @@ export function LandingPage({ activeTimer, isLoggedIn = false }: { activeTimer?:
 
               {/* Left: the pitch */}
               <div>
-                <p className="font-mono text-xs uppercase tracking-[0.12em] text-muted-foreground mb-3">Extensible by design</p>
+                <p className="font-mono text-xs uppercase tracking-[0.12em] text-muted-foreground mb-3">Start anywhere</p>
                 <h2 className="text-xl font-bold tracking-tight sm:text-2xl overflow-wrap-anywhere">
-                  New integrations take{" "}
-                  <span className="text-primary">one file.</span>
+                  Timers start where{" "}
+                  <span className="text-primary">you work.</span>
                 </h2>
                 <p className="mt-4 text-sm leading-relaxed text-muted-foreground">
-                  Every data source — calendar events, task lists, project todos — is a self-contained provider.
-                  Drop in a TypeScript file that implements the provider interface and your source
-                  shows up everywhere: the timer queue, history, filters, and auto-stop rules. No core changes required.
+                  The browser extension and the desktop app start and stop timers and sync them to Basecamp.
+                  The Basetrack dashboard stays out of the way — it only monitors: the running timer, history,
+                  auto-stop rules, and anything that needs your approval.
                 </p>
                 <a
-                  href={`${GITHUB_URL}/tree/main/apps/tracker/app/lib/providers`}
+                  href={`${GITHUB_URL}/tree/main/apps/extension`}
                   className="mt-5 inline-flex items-center gap-1.5 text-sm font-medium text-primary transition-colors hover:underline"
                 >
-                  Browse the provider API
+                  Browse the clients
                   <ArrowUpRight className="size-3.5" />
                 </a>
               </div>
@@ -257,10 +257,10 @@ export function LandingPage({ activeTimer, isLoggedIn = false }: { activeTimer?:
                       <Plus className="size-3 text-muted-foreground transition-colors group-hover:text-primary" />
                     </div>
                     <span className="text-sm font-semibold text-muted-foreground transition-colors group-hover:text-foreground">
-                      Add your own
+                      Build a client
                     </span>
                   </div>
-                  <p className="text-xs text-muted-foreground leading-relaxed">One TypeScript file. No core changes needed.</p>
+                  <p className="text-xs text-muted-foreground leading-relaxed">Connect a new client over the REST API or the timer socket.</p>
                   <div className="mt-3">
                     <span className="inline-block rounded-full bg-muted/50 px-2 py-0.5 font-mono text-[10px] font-medium text-muted-foreground">
                       Open Source

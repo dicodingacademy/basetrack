@@ -1,8 +1,7 @@
 import { useEffect } from "react";
 import { useFetcher } from "react-router";
 import { cn } from "../../lib/utils";
-import { Button } from "../ui/button";
-import { Clock, Square, Briefcase, History } from "lucide-react";
+import { Clock, Briefcase, History } from "lucide-react";
 import { fmtTime, fmtDurationShort } from "../../lib/format";
 import { SOURCES } from "../../lib/sources";
 import type { ActiveTimer, HistoryFetcherData, TimeEntryRow } from "../../types/tracker";
@@ -40,11 +39,9 @@ function TodayEntry({ e }: { e: TimeEntryRow }) {
   );
 }
 
-export function TimerPanel({ activeTimer, elapsed, onStop, isPending }: {
+export function TimerPanel({ activeTimer, elapsed }: {
   activeTimer: ActiveTimer | null;
   elapsed: number;
-  onStop: () => void;
-  isPending: boolean;
 }) {
   const todayFetcher = useFetcher<HistoryFetcherData>();
 
@@ -88,15 +85,11 @@ export function TimerPanel({ activeTimer, elapsed, onStop, isPending }: {
             <Briefcase className="size-3 text-muted-foreground shrink-0" />
             <p className="text-[11px] text-muted-foreground truncate">{activeTimer.projectName}</p>
           </div>
-          <div className="border-t border-border/40 pt-3 mb-3">
+          <div className="border-t border-border/40 pt-3">
             <p className="font-mono text-[40px] font-light text-primary leading-none tracking-tight">
               {fmtTime(elapsed)}
             </p>
           </div>
-          <Button variant="destructive" className="w-full gap-2" size="sm" disabled={isPending} onClick={onStop}>
-            <Square className="size-2.5 fill-current" />
-            Stop Timer
-          </Button>
         </div>
       ) : (
         <div className="flex flex-col items-center gap-3 px-5 py-6 border-b border-border shrink-0">
