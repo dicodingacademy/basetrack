@@ -45,6 +45,7 @@ export type ItemInfo = {
   title: string;
   description?: string;
   context: { key: string; label: string };
+  project?: Project;
 };
 
 export type StartRequest = {

@@ -108,7 +108,7 @@ export function createWidget({ placement, floating = false, large = false, mini 
   let toastTimeout: ReturnType<typeof setTimeout> | undefined;
   let tick: ReturnType<typeof setInterval> | undefined;
 
-  const resolved = () => (item ? resolveProject(mappings, item.source, item.context.key) : null);
+  const resolved = () => item?.project ?? (item ? resolveProject(mappings, item.source, item.context.key) : null);
   const isOpen = () => !panel.hidden;
 
   function anchor(el: HTMLElement, width: number) {
@@ -174,11 +174,11 @@ export function createWidget({ placement, floating = false, large = false, mini 
       mainBtn.title = `Stop · ${timer.todoTitle} (${timer.projectName})`;
     } else if (project) {
       setIcon(ICON_PLAY);
-      mainLabel.textContent = project.name;
+      mainLabel.textContent = item.project ? "Start timer" : project.name;
       mainBtn.title = timer
         ? `Start in ${project.name} — switches from “${timer.todoTitle}”`
         : `Start tracking in ${project.name}`;
-      caretBtn.hidden = false;
+      caretBtn.hidden = !!item.project;
     } else {
       setIcon(ICON_PLAY);
       mainLabel.textContent = "Start";
@@ -257,7 +257,7 @@ export function createWidget({ placement, floating = false, large = false, mini 
   }
 
   function openPicker() {
-    if (!item) return;
+    if (!item || item.project) return;
     root.dataset.theme = detectTheme(host.parentElement ?? document.body);
     toast.hidden = true;
     panelErr.hidden = true;
